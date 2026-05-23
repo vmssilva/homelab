@@ -1,0 +1,32 @@
+services:
+
+  mosquitto:
+    image: eclipse-mosquitto:2
+    container_name: mosquitto
+
+    ports:
+      - "1883:1883"
+
+    volumes:
+      - ./mosquitto/config:/mosquitto/config
+
+    restart: unless-stopped
+
+
+  homeassistant:
+    image: ghcr.io/home-assistant/home-assistant:stable
+    container_name: homeassistant
+
+    depends_on:
+      - mosquitto
+
+    ports:
+      - "8123:8123"
+
+    volumes:
+      - ./homeassistant/config:/config
+
+    environment:
+      - TZ=America/Sao_Paulo
+
+    restart: unless-stopped

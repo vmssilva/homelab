@@ -1,0 +1,19 @@
+2026-05-22 12:01:54.950 WARNING (ImportExecutor_0) [py.warnings] /usr/local/lib/python3.14/site-packages/rich/segment.py:547: SyntaxWarning: 'return' in a 'finally' block
+  return
+
+2026-05-22 12:26:36.521 ERROR (MainThread) [homeassistant] Error doing job: ClientConnectionResetError exception in shielded future (task: None)
+Traceback (most recent call last):
+  File "/usr/local/lib/python3.14/site-packages/aiohttp/_websocket/writer.py", line 240, in _send_compressed_frame_async_locked
+    self._write_websocket_frame(
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        (
+        ^
+    ...<8 lines>...
+        0x40,
+        ^^^^^
+    )
+    ^
+  File "/usr/local/lib/python3.14/site-packages/aiohttp/_websocket/writer.py", line 151, in _write_websocket_frame
+    raise ClientConnectionResetError("Cannot write to closing transport")
+aiohttp.client_exceptions.ClientConnectionResetError: Cannot write to closing transport
+2026-05-23 07:39:14.640 WARNING (MainThread) [homeassistant.components.mqtt.client] Error returned from MQTT server: The connection was lost.

@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "minor_version": 5,
+  "key": "core.config_entries",
+  "data": {
+    "entries": [
+      {"created_at":"2026-05-22T15:01:56.700013+00:00","data":{},"disabled_by":null,"discovery_keys":{},"domain":"sun","entry_id":"01KS83A5AVRWF0XMK9YR4ZAYRH","minor_version":1,"modified_at":"2026-05-22T15:01:56.700017+00:00","options":{},"pref_disable_new_entities":false,"pref_disable_polling":false,"source":"import","subentries":[],"title":"Sun","unique_id":null,"version":1},
+      {"created_at":"2026-05-22T15:01:59.656654+00:00","data":{},"disabled_by":null,"discovery_keys":{},"domain":"go2rtc","entry_id":"01KS83A878YRDSFZAJG3TTPKJR","minor_version":1,"modified_at":"2026-05-22T15:01:59.656658+00:00","options":{},"pref_disable_new_entities":false,"pref_disable_polling":false,"source":"system","subentries":[],"title":"go2rtc","unique_id":null,"version":1},
+      {"created_at":"2026-05-22T15:01:59.714267+00:00","data":{},"disabled_by":null,"discovery_keys":{},"domain":"backup","entry_id":"01KS83A8920TZF4HCNK63G1A0Z","minor_version":1,"modified_at":"2026-05-22T15:01:59.714272+00:00","options":{},"pref_disable_new_entities":false,"pref_disable_polling":false,"source":"system","subentries":[],"title":"Backup","unique_id":null,"version":1},
+      {"created_at":"2026-05-22T15:02:42.565262+00:00","data":{"language":"en","tld":"com"},"disabled_by":null,"discovery_keys":{},"domain":"google_translate","entry_id":"01KS83BJ45VZB0RAKC3HXS10D8","minor_version":1,"modified_at":"2026-05-22T15:02:42.565268+00:00","options":{},"pref_disable_new_entities":false,"pref_disable_polling":false,"source":"onboarding","subentries":[],"title":"Google Translate text-to-speech","unique_id":null,"version":1},
+      {"created_at":"2026-05-22T15:02:42.872562+00:00","data":{},"disabled_by":null,"discovery_keys":{},"domain":"shopping_list","entry_id":"01KS83BJDR71PMQ72RRA2Q97HZ","minor_version":1,"modified_at":"2026-05-22T15:02:42.872567+00:00","options":{},"pref_disable_new_entities":false,"pref_disable_polling":false,"source":"onboarding","subentries":[],"title":"Shopping list","unique_id":"shopping_list","version":1},
+      {"created_at":"2026-05-22T15:02:43.433624+00:00","data":{},"disabled_by":null,"discovery_keys":{},"domain":"radio_browser","entry_id":"01KS83BJZ9DS2HHMD5W3ZARBB0","minor_version":1,"modified_at":"2026-05-22T15:02:43.433629+00:00","options":{},"pref_disable_new_entities":false,"pref_disable_polling":false,"source":"onboarding","subentries":[],"title":"Radio Browser","unique_id":null,"version":1},
+      {"created_at":"2026-05-22T15:08:18.579937+00:00","data":{"broker":"mosquitto","port":1883},"disabled_by":null,"discovery_keys":{},"domain":"mqtt","entry_id":"01KS83NT8KFR4JEJ0MK1B0ZG8G","minor_version":1,"modified_at":"2026-05-22T15:08:18.579944+00:00","options":{},"pref_disable_new_entities":false,"pref_disable_polling":false,"source":"user","subentries":[],"title":"mosquitto","unique_id":null,"version":2}
+    ]
+  }
+}

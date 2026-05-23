@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "minor_version": 1,
+  "key": "person",
+  "data": {
+    "items": [
+      {
+        "id": "dida",
+        "name": "dida",
+        "user_id": "c223aa623ed348c4a3589fa33b049d66",
+        "device_trackers": []
+      }
+    ]
+  }
+}

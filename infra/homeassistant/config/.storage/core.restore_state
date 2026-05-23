@@ -1,0 +1,55 @@
+{
+  "version": 1,
+  "minor_version": 1,
+  "key": "core.restore_state",
+  "data": [
+    {
+      "state": {"entity_id":"conversation.home_assistant","state":"unknown","attributes":{"friendly_name":"Home Assistant","supported_features":1},"last_changed":"2026-05-23T13:41:43.613534+00:00","last_reported":"2026-05-23T13:41:43.613534+00:00","last_updated":"2026-05-23T13:41:43.613534+00:00","context":{"id":"01KSAH401XHM45JNXT3942ZFMV","parent_id":null,"user_id":null}},
+      "extra_data": null,
+      "last_seen": "2026-05-23T13:57:37.573823+00:00"
+    },
+    {
+      "state": {"entity_id":"event.backup_automatic_backup","state":"unknown","attributes":{"event_types":["completed","failed","in_progress"],"event_type":null,"friendly_name":"Backup Automatic backup"},"last_changed":"2026-05-23T13:41:43.746356+00:00","last_reported":"2026-05-23T13:41:43.746356+00:00","last_updated":"2026-05-23T13:41:43.746356+00:00","context":{"id":"01KSAH4062HQYAP0HVR5EKMZRQ","parent_id":null,"user_id":null}},
+      "extra_data": {
+        "last_event_type": null,
+        "last_event_attributes": null
+      },
+      "last_seen": "2026-05-23T13:57:37.573823+00:00"
+    },
+    {
+      "state": {"entity_id":"person.dida","state":"unknown","attributes":{"editable":true,"id":"dida","device_trackers":[],"in_zones":[],"user_id":"c223aa623ed348c4a3589fa33b049d66","friendly_name":"dida"},"last_changed":"2026-05-23T13:41:45.161619+00:00","last_reported":"2026-05-23T13:42:37.572091+00:00","last_updated":"2026-05-23T13:42:37.572091+00:00","context":{"id":"01KSAH5MR42369F22E49VE3KSZ","parent_id":null,"user_id":null}},
+      "extra_data": null,
+      "last_seen": "2026-05-23T13:57:37.573823+00:00"
+    },
+    {
+      "state": {"entity_id":"tts.google_translate_en_com","state":"unknown","attributes":{"friendly_name":"Google Translate en com"},"last_changed":"2026-05-23T13:41:50.754859+00:00","last_reported":"2026-05-23T13:41:50.754859+00:00","last_updated":"2026-05-23T13:41:50.754859+00:00","context":{"id":"01KSAH471221ZKA04T1FXES7FW","parent_id":null,"user_id":null}},
+      "extra_data": null,
+      "last_seen": "2026-05-23T13:57:37.573823+00:00"
+    },
+    {
+      "state": {"entity_id":"light.kitchen","state":"off","attributes":{"supported_color_modes":["onoff"],"color_mode":null,"friendly_name":"kitchen","supported_features":0},"last_changed":"2026-05-23T13:41:52.365096+00:00","last_reported":"2026-05-23T13:41:52.365096+00:00","last_updated":"2026-05-23T13:41:52.365096+00:00","context":{"id":"01KSAH48KD2ZDYFFNNM79ZP837","parent_id":null,"user_id":null}},
+      "extra_data": null,
+      "last_seen": "2026-05-23T13:57:37.573823+00:00"
+    },
+    {
+      "state": {"entity_id":"light.bedroom","state":"off","attributes":{"supported_color_modes":["onoff"],"color_mode":null,"friendly_name":"bedroom","supported_features":0},"last_changed":"2026-05-23T13:41:52.366198+00:00","last_reported":"2026-05-23T13:41:52.366198+00:00","last_updated":"2026-05-23T13:41:52.366198+00:00","context":{"id":"01KSAH48KECP7XHD5MB1T1EZ8P","parent_id":null,"user_id":null}},
+      "extra_data": null,
+      "last_seen": "2026-05-23T13:57:37.573823+00:00"
+    },
+    {
+      "state": {"entity_id":"light.office","state":"off","attributes":{"supported_color_modes":["onoff"],"color_mode":null,"friendly_name":"office","supported_features":0},"last_changed":"2026-05-23T13:41:52.367151+00:00","last_reported":"2026-05-23T13:41:52.367151+00:00","last_updated":"2026-05-23T13:41:52.367151+00:00","context":{"id":"01KSAH48KFGMWF1BZ1RDJCF7C1","parent_id":null,"user_id":null}},
+      "extra_data": null,
+      "last_seen": "2026-05-23T13:57:37.573823+00:00"
+    },
+    {
+      "state": {"entity_id":"light.light","state":"off","attributes":{"supported_color_modes":["onoff"],"color_mode":null,"friendly_name":"light","supported_features":0},"last_changed":"2026-05-23T13:52:00.980577+00:00","last_reported":"2026-05-23T13:52:03.788087+00:00","last_updated":"2026-05-23T13:52:00.980577+00:00","context":{"id":"01KSAHPTYF2GFV5G9JRPEY28DF","parent_id":null,"user_id":"c223aa623ed348c4a3589fa33b049d66"}},
+      "extra_data": null,
+      "last_seen": "2026-05-23T13:57:37.573823+00:00"
+    },
+    {
+      "state": {"entity_id":"light.test","state":"unknown","attributes":{"supported_color_modes":["onoff"],"color_mode":null,"friendly_name":"Test","supported_features":0},"last_changed":"2026-05-23T10:39:24.616534+00:00","last_reported":"2026-05-23T10:39:24.616534+00:00","last_updated":"2026-05-23T10:39:24.616534+00:00","context":{"id":"01KSA6P5E8NCYB8WFF5AP5R1H7","parent_id":null,"user_id":null}},
+      "extra_data": null,
+      "last_seen": "2026-05-23T10:41:25.423385+00:00"
+    }
+  ]
+}
