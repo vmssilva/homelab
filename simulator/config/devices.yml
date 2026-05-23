@@ -1,0 +1,40 @@
+broker: localhost
+
+devices:
+  - type: energy
+    id: house_power
+    name: Consumo Casa
+    base_power: 350
+
+  - type: energy
+    id: ac_power
+    name: Ar Condicionado
+    base_power: 1200
+
+  - type: light
+    id: kitchen
+    name: Cozinha
+
+  - type: light
+    id: bedroom
+
+  - type: climate
+    id: office_ac
+
+  - type: fan
+    id: bedroom_fan
+
+  - type: sensor
+    id: temperature_sensor
+
+  - type: binary_sensor
+    id: front_door_sensor
+
+  - type: cover
+    id: garage
+
+  - type: lock
+    id: front_door
+
+  - type: button
+    id: doorbell
