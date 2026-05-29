@@ -1,0 +1,201 @@
+broker: localhost
+
+devices:
+  # Entidade 1: O trinco da fechadura
+  - type: lock
+    id: front_door_lock
+    name: Fechadura da Entrada
+    configurations:
+      device:
+        identifiers: ["hub_portaria_principal"]
+        name: "Portaria Principal"
+        model: "Smart Gateway de Acesso"
+
+  # Entidade 2: O sensor magnético de abertura
+  - type: binary_sensor
+    id: front_door_sensor
+    name: Sensor da Porta
+    configurations:
+      device:
+        identifiers: ["hub_portaria_principal"] # MESMO ID! O HA vai juntar os dois aqui.
+        name: "Portaria Principal"
+
+  # --- OUTROS DISPOSITIVOS (Vão gerar seus próprios hardwares automáticos) ---
+  - type: switch
+    id: main_pump
+    name: Bomba Principal
+
+  - type: climate
+    id: office_ac
+    name: Ar do Escritório
+
+  - type: vacuum
+    id: living_room_robovac
+    name: Robô Aspirador
+
+  - type: light
+    id: garage_light
+    name: Luz da Garagem
+    configurations:
+      brightness: true
+      supported_color_modes: [rgb, color_temp]
+      schema: json
+
+# --------------------------------------------------------------------------
+#  - type: energy
+#    id: ac_power
+#    name: Ar Condicionado
+#    base_power: 1200
+#
+#  - type: light
+#    id: kitchen
+#    name: Cozinha
+#
+#  - type: light
+#    id: bedroom
+#
+#  - type: climate
+#    id: office_ac
+#
+#  - type: fan
+#    id: bedroom_fan
+#
+#  - type: sensor
+#    id: temperature_sensor
+#
+#  - type: binary_sensor
+#    id: front_door_sensor
+#
+#  - type: cover
+#    id: garage
+#
+#  - type: lock
+#    id: front_door
+#
+#  - type: button
+#    id: doorbell
+#
+# ---------------------------------------------------------------------------
+#
+#  # 1. SWITCH - Simples (ON/OFF)
+#  - type: switch
+#    id: main_pump
+#    name: Bomba Principal
+#
+#  # 2. LIGHT - Variação 1: Lâmpada Inteligente (Esquema JSON com brilho e cor)
+#  - type: light
+#    id: garage_light
+#    name: Luz da Garagem
+#    configurations:
+#      schema: json
+#      brightness: true
+#      supported_color_modes: [rgb, color_temp]
+#
+#  # 3. LIGHT - Variação 2: Lâmpada Comum (Sem nada, vira ON/OFF puro)
+#  - type: light
+#    id: kitchen_light
+#    name: Luz da Cozinha
+#
+#  # 4. CLIMATE - Ar Condicionado / Termostato
+#  - type: climate
+#    id: office_ac
+#    name: Ar do Escritório
+#
+#  # 5. VACUUM - Aspirador de Pó Robô (Customizando as features suportadas)
+#  - type: vacuum
+#    id: living_room_robovac
+#    name: Robô Aspirador
+#    configurations:
+#      supported_features: ["start", "stop", "return_home", "battery"]
+#
+#  # 6. FAN - Ventilador (Injetando controle de velocidade/porcentagem)
+#  - type: fan
+#    id: bedroom_fan
+#    name: Ventilador do Quarto
+#    configurations:
+#      percentage: true
+#
+#  # 7. SENSOR - Sensor Numérico Genérico
+#  - type: sensor
+#    id: temperature_sensor
+#    name: Sensor de Temperatura
+#
+#  # 8. BINARY_SENSOR - Sensor de Estado Binário (Aberto/Fechado, Movimento)
+#  - type: binary_sensor
+#    id: front_door_sensor
+#    name: Sensor da Porta
+#
+#  # 9. ENERGY - Telemetria de Energia (Usa chaves soltas na raiz para testar a Factory)
+#  - type: energy
+#    id: house_power
+#    name: Consumo Residencial
+#    base_power: 350
+#    unit_of_measurement: "kWh"
+#
+#  # 10. COVER - Cortina, Portão ou Persiana
+#  - type: cover
+#    id: garage_gate
+#    name: Portão da Garagem
+#
+#  # 11. LOCK - Fechadura Eletrônica
+#  - type: lock
+#    id: front_door_lock
+#    name: Fechadura da Entrada
+#
+#  # 12. BUTTON - Botão de Disparo / Campainha (Teste sem o campo 'name')
+#  - type: button
+#    id: front_doorbell
+#    name: Front doorbell
+#
+#  # 13. SIREN - Sirene de Alarme / Beeper
+#  - type: siren
+#    id: backyard_siren
+#    name: Sirene do Quintal
+#
+#  # 14. ALARM - Painel de Alarme (Com chaves na raiz alterando comportamento)
+#  - type: alarm
+#    id: house_security_panel
+#    name: Alarme Residencial
+#    code_arm_required: false
+#    code_disarm_required: false
+#
+#  # 15. DEVICE_TRACKER - Rastreador de Presença
+#  - type: device_tracker
+#    id: john_phone
+#    name: Celular do João
+#
+#  # 16. MEDIA_PLAYER - Controlador de TV / Som
+#  - type: media_player
+#    id: living_room_tv
+#    name: TV da Sala
+#
+#  # 17. SELECT - Caixa de Seleção / Dropdown (Variando as opções disponíveis)
+#  - type: select
+#    id: house_mode
+#    name: Perfil da Casa
+#    configurations:
+#      options: ["Normal", "Festa", "Viagem", "Noite"]
+#
+#  # 18. NUMBER - Controle Deslizante / Slider (Variando limites e passos)
+#  - type: number
+#    id: irrigation_duration
+#    name: Tempo de Rega
+#    configurations:
+#      min: 5
+#      max: 60
+#      step: 5
+#
+#  # 19. HUMIDIFIER - Umidificador de Ar
+#  - type: humidifier
+#    id: baby_room_humidifier
+#    name: Umidificador do Quarto
+#
+#  # 20. WATER_HEATER - Aquecedor de Água / Boiler
+#  - type: water_heater
+#    id: central_boiler
+#    name: Boiler Central
+#  - type: energy
+#    id: house_power
+#    name: Consumo Casa
+#    base_power: 350
+#

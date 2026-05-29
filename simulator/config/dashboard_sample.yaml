@@ -1,0 +1,147 @@
+title: "Mansão Inteligente - Simulador MQTT"
+views:
+  - title: "Visão Geral"
+    path: visao_geral
+    icon: mdi:home-assistant
+    type: sidebar
+    cards:
+      # --- COLUNA LATERAL (Status Rápidos e Modos) ---
+      - type: vertical-stack
+        view_layout:
+          position: sidebar
+        cards:
+          - type: title
+            title: "Controle Central"
+            
+          # Alarme Residencial
+          - type: alarm-panel
+            entity: alarm_control_panel.house_security_panel
+            states:
+              - armed_home
+              - armed_away
+            name: "Sistema de Segurança"
+
+          # Seletor de Perfil da Casa
+          - type: entities
+            entities:
+              - entity: select.house_mode
+                name: "Perfil Ativo"
+                icon: mdi:home-cog
+
+          # Gráfico de Consumo Geral (Usa mini-graph-card)
+          - type: custom:mini-graph-card
+            entities:
+              - entity: sensor.house_power
+                name: "Consumo Instantâneo"
+            line_color: "#e74c3c"
+            line_width: 4
+            font_size: 75
+            animate: true
+            show:
+              extrema: true
+
+      # --- COLUNA PRINCIPAL (Cômodos e Dispositivos) ---
+      - type: vertical-stack
+        cards:
+          # --- SEÇÃO: SALA DE ESTAR & SERVIÇOS ---
+          - type: grid
+            title: "Sala de Estar & Robótica"
+            columns: 2
+            square: false
+            cards:
+              # TV da Sala (Media Player)
+              - type: media-control
+                entity: media_player.living_room_tv
+                name: "Smart TV 4K"
+
+              # Robô Aspirador (Vacuum)
+              - type: vacuum-card
+                entity: vacuum.living_room_robovac
+                show_statuses:
+                  - battery_level
+                  - status
+
+          # --- SEÇÃO: ACESSOS E ENTRADA ---
+          - type: grid
+            title: "Controle de Acessos"
+            columns: 3
+            square: false
+            cards:
+              # Fechadura Principal (Lock)
+              - type: lock
+                entity: lock.front_door_lock
+                name: "Porta Principal"
+
+              # Portão da Garagem (Cover)
+              - type: cover
+                entity: cover.garage_gate
+                name: "Portão Garagem"
+
+              # Campainha (Button usando Custom Button Card para piscar no clique)
+              - type: custom:button-card
+                entity: button.front_doorbell
+                name: "Campainha"
+                icon: mdi:bell-ring
+                color: auto
+                styles:
+                  card:
+                    - height: 95px
+                  icon:
+                    - color: "#f1c40f"
+                tap_action:
+                  action: toggle
+
+          # --- SEÇÃO: INFRAESTRUTURA E CLIMA ---
+          - type: grid
+            title: "Climatização & Utilidades"
+            columns: 2
+            square: false
+            cards:
+              # Ar Condicionado (Climate)
+              - type: thermostat
+                entity: climate.office_ac
+                name: "Ar Escritório"
+
+              # Boiler Central (Water Heater)
+              - type: water-heater
+                entity: water_heater.central_boiler
+                name: "Boiler de Água"
+
+          # --- SEÇÃO: ILUMINAÇÃO INTERATIVA ---
+          - type: grid
+            title: "Iluminação"
+            columns: 3
+            square: false
+            cards:
+              # Luz da Garagem (Luz Dinâmica com Brilho/Cor)
+              - type: light
+                entity: light.garage_light
+                name: "Garagem (RGB)"
+
+              # Luz da Cozinha (Luz Simples ON/OFF)
+              - type: entity
+                entity: light.kitchen_light
+                name: "Cozinha"
+                icon: mdi:lightbulb-outline
+
+              # Ventilador do Quarto (Fan)
+              - type: fan
+                entity: fan.bedroom_fan
+                name: "Ventilador"
+
+          # --- SEÇÃO: SEGURANÇA E SENSORES ---
+          - type: entities
+            title: "Sensores & Periféricos"
+            show_header_toggle: false
+            entities:
+              - entity: binary_sensor.front_door_sensor
+                name: "Status da Porta de Entrada"
+              - entity: sensor.temperature_sensor
+                name: "Temperatura Externa"
+              - entity: siren.backyard_siren
+                name: "Sirene do Perímetro"
+                icon: mdi:siren
+              - entity: switch.main_pump
+                name: "Bomba d'Água da Piscina"
+              - entity: device_tracker.john_phone
+                name: "Localização: João"
