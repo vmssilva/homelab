@@ -9,6 +9,12 @@
         "name": "dida",
         "user_id": "c223aa623ed348c4a3589fa33b049d66",
         "device_trackers": []
+      },
+      {
+        "id": "dida_2",
+        "name": "dida",
+        "user_id": "908f09f2035142178ec0ed5c8d79ad2d",
+        "device_trackers": []
       }
     ]
   }

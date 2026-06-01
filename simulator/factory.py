@@ -1,27 +1,14 @@
-from typing import Dict, Optional, Type
+from typing import Dict, Optional, Type, Any
+
 from .devices import *
 
 class DeviceFactory:
     _registry: Dict[str, Type[Device]] = {
-        "switch": SwitchDevice,
-        "light": LightDevice,
-        "climate": ClimateDevice,
-        "fan": FanDevice,
-        "sensor": SensorDevice,
-        "binary_sensor": BinarySensorDevice,
-        "energy": EnergyDevice,
-        "cover": CoverDevice,
-        "lock": LockDevice,
-        "button": ButtonDevice,
-        "vacuum": VacuumDevice,
-        "siren": SirenDevice,
-        "alarm": AlarmDevice,
-        "device_tracker": DeviceTrackerDevice,
-        "media_player": MediaPlayerDevice,
-        "select": SelectDevice,         # Adicionado
-        "number": NumberDevice,         # Adicionado
-        "humidifier": HumidifierDevice, # Adicionado
-        "water_heater": WaterHeaterDevice # Adicionado
+        "light": Light, "switch": Switch, "climate": Climate, "fan": Fan,
+        "sensor": Sensor, "binary_sensor": BinarySensor, "energy": Energy,
+        "cover": Cover, "lock": Lock, "button": Button, "vacuum": Vacuum,
+        "siren": Siren, "alarm_control_panel": Alarm, "device_tracker": DeviceTracker,
+        "humidifier": Humidifier, "water_heater": WaterHeater
     }
 
     @classmethod
@@ -30,44 +17,43 @@ class DeviceFactory:
         device_type: str,
         id: str,
         name: Optional[str],
-        service: MQTTService,
+        service: Any,
         raw_data: dict,
     ) -> Device:
         device_class = cls._registry.get(device_type.lower())
 
         if not device_class:
             raise ValueError(
-                f"Tipo de dispositivo desconhecido de fábrica: '{device_type}'"
+                logger.error(f"Tipo de dispositivo desconhecido de fábrica: '{device_type}'")
             )
 
-        # 1. Trata o nome amigável
+        # 1. Trata o nome amigável se vier nulo do YAML
         final_name: str = (
             name if name is not None else id.replace("_", " ").title()
         )
 
-        # 2. Instancia o dispositivo de forma limpa (sem passar o dicionário options)
-        device = device_class(id=id, name=final_name, service=service)
+        # 2. Estrutura o dicionário 'options' exatamente como a nova classe base espera
+        options: Dict[str, Any] = {
+            "configurations": raw_data.get("configurations", {}),
+            "attributes": raw_data.get("attributes", {}),
+            "triggers": raw_data.get("triggers", [])
+        }
 
-        # 3. Alimenta as configurações vindas do bloco 'configurations' do YAML
-        user_configs = raw_data.get("configurations", {})
-        for k, v in user_configs.items():
-            device.addConfiguration(k, v)
-
-        # 4. Alimenta os atributos vindos do bloco 'attributes' do YAML
-        user_attributes = raw_data.get("attributes", {})
-        for k, v in user_attributes.items():
-            device.addAttribute(k, v)
-
-        # 5. Move chaves soltas na raiz do YAML para dentro de 'attributes'
-        reserved_keys = ["type", "id", "name", "configurations", "attributes"]
+        # 3. Move chaves soltas na raiz do YAML para dentro de 'attributes'
+        reserved_keys = ["type", "id", "name", "domain", "device_type", "configurations", "attributes", "triggers"]
         for key, value in raw_data.items():
             if key not in reserved_keys:
-                device.addAttribute(key, value)
+                options["attributes"][key] = value
 
-        # 6. Aplica a mesclagem da configuração base do Home Assistant
-        device.apply_base_configuration()
+        # 4. Instancia o dispositivo passando o contrato unificado
+        device = device_class(
+            id=id, 
+            name=final_name, 
+            service=service, 
+            options=options
+        )
 
-        # 7. Se a subclasse tiver uma inicialização customizada pós-configuração (como a LightDevice)
+        # 5. Se a subclasse tiver pós-inicialização (opcional)
         if hasattr(device, "post_init"):
             device.post_init()  # type: ignore
 

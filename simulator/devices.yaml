@@ -1,0 +1,16 @@
+broker: "localhost"
+devices:
+  #- type: "light"
+  #  id: "kitchen"
+  #  configurations:
+  #    schema: "json"
+  #    brightness: true
+  #  attributes:
+  #    state: "OFF"
+  #    brightness: 100
+
+
+  #- type: "light"
+  #  id: "simple_kitchen"
+  #  attributes:
+  #    state: "ON"

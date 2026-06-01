@@ -12,6 +12,14 @@
         "show_in_sidebar": true,
         "mode": "storage",
         "require_admin": false
+      },
+      {
+        "id": "dashboard_teste",
+        "show_in_sidebar": true,
+        "title": "teste",
+        "require_admin": false,
+        "mode": "storage",
+        "url_path": "dashboard-teste"
       }
     ]
   }

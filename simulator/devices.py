@@ -1,785 +1,946 @@
-from os import wait
-from typing import Any, Dict, Optional, Type
 import json
-from .constants import *
-from .mqtt import MQTTService
+from logging import log, logMultiprocessing
+from .logger import logger
 
-from .constants import *
+from typing import Any, Dict, Optional
+
+BASE_ROUTE = "homeassistant"  # Ajuste conforme suas variáveis globais
 
 class Device:
-    domain = "switch"
-    optimistic = True
-    schema = None
-
-    def __init__(self, id: str, name: str, service: MQTTService) -> None:
-        self.id = id
-        self.name = name or id.replace("_", " ").title()
-        self.service = service
-
-        self.options: Dict[str, Dict[str, Any]] = {
-            "configurations": {},
-            "attributes": {},
-        }
-        self.options["attributes"]["state"] = "OFF"
-
-    def apply_base_configuration(self) -> None:
-        """Monta a configuração base do Discovery incluindo o agrupamento de Device."""
-        current_schema = self.schema or self.getConfiguration("schema")
-
-        # --- LÓGICA DE AGRUPAMENTO DE DEVICE ---
-        # Criamos uma estrutura de hardware que o HA reconhece na aba 'Dispositivos'
-        device_info = {
-            "identifiers": [f"virtual_device_{self.id}"], # ID único do hardware
-            "name": f"{self.name} Hardware",              # Nome do dispositivo físico
-            "model": f"Simulador MQTT v2.0 ({self.domain.title()})",
-            "manufacturer": "Python IoT Labs 2026"
-        }
-
-        base_config = {
-            "name": f"{self.name}",
-            "unique_id": f"{self.id}",
-            "discovery_topic": f"{BASE_ROUTE}/{self.domain}/{self.id}/config",
-            "command_topic": f"{BASE_ROUTE}/{self.domain}/{self.id}/set",
-            "state_topic": f"{BASE_ROUTE}/{self.domain}/{self.id}/state",
-            "availability_topic": f"{BASE_ROUTE}/{self.domain}/{self.id}/availability",
-            "payload_available": "online",
-            "payload_not_available": "offline",
-            "optimistic": self.optimistic,
-            "device": device_info  # Injeta o agrupamento aqui
-        }
-
-        if current_schema is not None:
-            base_config["schema"] = current_schema
-
-        if not self.optimistic:
-            base_config.pop("optimistic", None)
-
-        # Mescla garantindo que o que está no YAML possa sobrescrever os metadados do device se necessário
-        user_configs = self.options["configurations"].copy()
+    def __init__(self, id: str, name: str, service: Any, options: Dict[str, Any]) -> None:
+        self.id: str = id
+        self.domain: str = ""
+        self.name: str = name or id.replace("_", " ").title()
+        self.service: Any = service  # MQTTService
         
-        # Se o usuário já definiu chaves de 'device' customizadas no YAML, mescla de forma segura
-        if "device" in user_configs:
-            base_config["device"].update(user_configs["device"])
-            user_configs.pop("device")
+        # Estrutura isolada conforme o YAML
+        self.options: Dict[str, Any] = options
+        self.configurations: Dict[str, Any] = options.get("configurations", {})
+        self.attributes: Dict[str, Any] = options.get("attributes", {})
+        self.triggers: list = options.get("triggers", [])
 
-        self.options["configurations"].update(base_config)
-        self.options["configurations"].update(user_configs)
+        # Garante estado inicial padrão se omitido no YAML
+        #if "state" not in self.attributes:
+        #    self.attributes["state"] = "OFF"
 
-    # --- Métodos de Tópicos e Gerenciamento (Mantidos iguais) ---
-    def stateTopic(self) -> str:
-        return self.getConfiguration("state_topic", "")
+    # --- Gerenciamento de Tópicos (Fora do Payload) ---
+    def discovery_topic(self) -> str:
+        return f"{BASE_ROUTE}/{self.domain}/{self.id}/config"
 
-    def discoveryTopic(self) -> str:
-        return self.getConfiguration("discovery_topic", "")
+    def state_topic(self) -> str:
+        return f"{BASE_ROUTE}/{self.domain}/{self.id}/state"
 
-    def commandTopic(self) -> str:
-        return self.getConfiguration("command_topic", "")
+    def command_topic(self) -> str:
+        return f"{BASE_ROUTE}/{self.domain}/{self.id}/set"
 
-    def addAttribute(self, key: str, value: Any) -> None:
-        self.options["attributes"][key] = value
+    def availability_topic(self) -> str:
+        return f"{BASE_ROUTE}/{self.domain}/{self.id}/availability"
 
-    def removeAttribute(self, key: str) -> None:
-        self.options["attributes"].pop(key, None)
+    # --- Contrato de Manipulação de Atributos Internos ---
+    def add_attribute(self, key: str, value: Any) -> None:
+        self.attributes[key] = value
 
-    def getAttribute(self, key: str, default: Any = None) -> Any:
-        return self.options["attributes"].get(key, default)
+    def remove_attribute(self, key: str) -> None:
+        self.attributes.pop(key, None)
 
-    def addConfiguration(self, key: str, value: Any) -> None:
-        self.options["configurations"][key] = value
+    def get_attribute(self, key: str, default: Any = None) -> Any:
+        return self.attributes.get(key, default)
 
-    def removeConfiguration(self, key: str) -> None:
-        self.options["configurations"].pop(key, None)
-
-    def getConfiguration(self, key: str, default: Any = None) -> Any:
-        return self.options["configurations"].get(key, default)
-
-    def state(self) -> Any:
-        return self.getAttribute("state")
-
-    def payload(self) -> Dict[str, Any]:
-        return self.options["attributes"]
-
-    def updateState(self, new_state: Optional[Any] = None) -> None:
-        if new_state is not None:
-            self.addAttribute("state", new_state)
-        self.service.publish(self.stateTopic(), str(self.state()), retain=True)
-
+    # --- Ciclo de Vida do MQTT ---
     def setup(self) -> None:
-        config_payload = self.options["configurations"].copy()
-        config_payload.pop("discovery_topic", None)
-        self.service.publish(self.discoveryTopic(), config_payload, retain=True)
+        """Executa o Discovery e se inscreve nos comandos recebidos."""
+        # 1. Monta o payload de descoberta baseado estritamente nas configurações do YAML
+        discovery_payload = {
+            "name": self.name,
+            "unique_id": self.id,
+            "state_topic": self.state_topic(),
+            "availability_topic": self.availability_topic(),
+            "payload_available": "online",
+            "payload_not_available": "offline"
+        }
+        
+        # Se for um dispositivo que aceita comandos, injeta o command_topic
+        if self.domain not in ["sensor", "binary_sensor"]:
+            discovery_payload["command_topic"] = self.command_topic()
 
-        cmd_topic = self.commandTopic()
-        if cmd_topic and self.domain not in ["sensor", "binary_sensor"]:
-            self.service.subscribe(cmd_topic, self._on_command_received)
+        # Mescla com as configurações específicas do HA declaradas no YAML (Ex: schema, brightness, device)
+        discovery_payload.update(self.configurations)
 
-        avail_topic = self.getConfiguration("availability_topic")
-        if avail_topic:
-            self.service.publish(avail_topic, "online", retain=True)
-        self.updateState()
+        # 2. Publica o Discovery
+        self.service.publish(self.discovery_topic(), discovery_payload, retain=True)
 
-    def _on_command_received(self, client, userdata, msg) -> None:
-        command = msg.payload.decode("utf-8")
-        self.updateState(new_state=command)
+        # 3. Publica a disponibilidade online
+        self.service.publish(self.availability_topic(), "online", retain=True)
 
-class LightDevice(Device):
-    domain = "light"
+        # 4. Se inscreve no canal de comandos vindos do Home Assistant
+        if "command_topic" in discovery_payload:
+            self.service.subscribe(self.command_topic(), self.on_message)
 
-    def post_init(self) -> None:
-        """Lógica executada após a Factory injetar os dados do YAML."""
-        self.is_json_schema = self.getConfiguration("schema") == "json"
+        # 5. Publica o estado inicial da aplicação
+        self.update()
 
-        if self.is_json_schema:
-            self.options["attributes"].setdefault("state", "OFF")
-            self.options["attributes"].setdefault("brightness", 255)
-            self.options["attributes"].setdefault(
-                "color", {"r": 255, "g": 255, "b": 255}
-            )
+    def set_value(self, key: str, value: Any) -> None:
+        """Altera um atributo interno da aplicação e sincroniza com o Home Assistant."""
+        self.add_attribute(key, value)
+        self.update()
 
-    def updateState(self, new_state: Optional[Any] = None) -> None:
-        if self.is_json_schema:
-            if new_state is not None:
-                if isinstance(new_state, dict):
-                    if "state" in new_state:
-                        self.addAttribute("state", new_state["state"])
-                    if "brightness" in new_state:
-                        self.addAttribute(
-                            "brightness", new_state["brightness"]
-                        )
-                    if "color" in new_state:
-                        self.addAttribute("color", new_state["color"])
-                else:
-                    self.addAttribute("state", str(new_state).upper())
+    def update(self) -> None:
+        """Publica o estado atual respeitando o formato do schema configurado."""
+        is_json_schema = self.configurations.get("schema") == "json"
 
-            payload_ha = {
-                "state": self.getAttribute("state"),
-                "brightness": self.getAttribute("brightness"),
-            }
-            if self.getAttribute("color"):
-                payload_ha["color"] = self.getAttribute("color")
-
-            self.service.publish(self.stateTopic(), payload_ha, retain=True)
+        if is_json_schema:
+            # Envia o dicionário completo em formato JSON
+            payload_ha = json.dumps(self.attributes)
         else:
-            if new_state is not None:
-                self.addAttribute("state", str(new_state).upper())
-            self.service.publish(
-                self.stateTopic(), str(self.state()), retain=True
-            )
+            # Envia apenas a string pura "ON" ou "OFF"
+            payload_ha = str(self.get_attribute("state", "OFF"))
 
-    def _on_command_received(self, client, userdata, msg) -> None:
-        payload_str = msg.payload.decode("utf-8")
-        if self.is_json_schema:
-            try:
-                command_data = json.loads(payload_str)
-                self.updateState(new_state=command_data)
-            except json.JSONDecodeError:
-                self.updateState(new_state=payload_str)
-        else:
-            self.updateState(new_state=payload_str)
+        self.service.publish(self.state_topic(), payload_ha, retain=True)
 
-
-# --- SENSORES (Apenas Leitura - Sem Tópico de Comando) ---
-class SensorDevice(Device):
-    domain = "sensor"
-    optimistic = False
-
-    def apply_base_configuration(self) -> None:
-        super().apply_base_configuration()
-        # Sensores não recebem comandos do HA, apenas enviam dados
-        self.removeConfiguration("command_topic")
-
-
-class BinarySensorDevice(SensorDevice):
-    domain = "binary_sensor"
-
-    def post_init(self) -> None:
-        # Sensores binários no HA costumam usar ON/OFF por padrão
-        self.options["attributes"].setdefault("state", "OFF")
-
-
-class EnergyDevice(SensorDevice):
-    domain = "sensor"
-
-    def post_init(self) -> None:
-        # Força as configurações recomendadas do HA para monitoramento de energia
-        self.addConfiguration("device_class", "energy")
-        self.addConfiguration("state_class", "total_increasing")
-        self.addConfiguration("unit_of_measurement", "kWh")
-        self.options["attributes"].setdefault("state", 0.0)
-
-
-# --- ATUADORES E CONTROLES (Com Tópico de Comando) ---
-class FanDevice(Device):
-    domain = "fan"
-
-    def post_init(self) -> None:
-        # Suporta controle de velocidade opcional se configurado no YAML
-        if self.getConfiguration("percentage"):
-            self.addConfiguration(
-                "percentage_command_topic",
-                f"{BASE_ROUTE}/{self.domain}/{self.id}/percentage/set",
-            )
-            self.addConfiguration(
-                "percentage_state_topic",
-                f"{BASE_ROUTE}/{self.domain}/{self.id}/percentage/state",
-            )
-            self.options["attributes"].setdefault("percentage", 0)
-
-    def updateState(self, new_state: Optional[Any] = None) -> None:
-        if new_state is not None:
-            if isinstance(new_state, dict):
-                if "state" in new_state:
-                    self.addAttribute("state", new_state["state"])
-                if "percentage" in new_state:
-                    self.addAttribute(
-                        "percentage", int(new_state["percentage"])
-                    )
-            else:
-                self.addAttribute("state", str(new_state).upper())
-
-        # Publica o estado principal
-        self.service.publish(self.stateTopic(), str(self.state()), retain=True)
-
-        # Se tiver controle de porcentagem ativo, publica também
-        pct_topic = self.getConfiguration("percentage_state_topic")
-        if pct_topic:
-            self.service.publish(
-                pct_topic, str(self.getAttribute("percentage")), retain=True
-            )
-
-    def _on_command_received(self, client, userdata, msg) -> None:
-        payload = msg.payload.decode("utf-8")
-        # Identifica se o comando veio do tópico de porcentagem ou do botão liga/desliga
-        if "percentage" in msg.topic:
-            print(f"🌀 [{self.name}] Alterar velocidade para: {payload}%")
-            self.updateState(new_state={"percentage": payload})
-        else:
-            print(f"🌀 [{self.name}] Alterar estado para: {payload}")
-            self.updateState(new_state=payload)
-
-
-class CoverDevice(Device):
-    """Controle de Cortinas, Persianas ou Portões de Garagem."""
-
-    domain = "cover"
-    optimistic = False
-
-    def apply_base_configuration(self) -> None:
-        super().apply_base_configuration()
-        # Covers usam 'state_topic' para posição/estado, mas o HA mapeia comandos específicos
-        # open, close, stop
-        self.options["attributes"].setdefault("state", "closed")
-
-    def _on_command_received(self, client, userdata, msg) -> None:
-        command = msg.payload.decode("utf-8").lower()  # open | close | stop
-        print(f" garage [{self.name}] Comando de cobertura: {command}")
-
-        if command == "open":
-            self.updateState(new_state="open")
-        elif command == "close":
-            self.updateState(new_state="closed")
-        elif command == "stop":
-            print(f" garage [{self.name}] Movimento interrompido.")
-
-
-class LockDevice(Device):
-    """Fechaduras Eletrônicas."""
-
-    domain = "lock"
-    optimistic = False
-
-    def apply_base_configuration(self) -> None:
-        super().apply_base_configuration()
-        self.options["attributes"].setdefault("state", "LOCKED")
-
-    def _on_command_received(self, client, userdata, msg) -> None:
-        command = msg.payload.decode(
-            "utf-8"
-        ).upper()  # LOCK | UNLOCK do Home Assistant
-        print(f"🔒 [{self.name}] Tranca recebendo ordem de: {command}")
-
-        if command == "LOCK":
-            self.updateState(new_state="LOCKED")
-        elif command == "UNLOCK":
-            self.updateState(new_state="UNLOCKED")
-
-class ButtonDevice(Device):
-    """Botões/Gatilhos (Apenas recebem comando do HA para acionar algo)."""
-
-    domain = "button"
-    optimistic = False
-
-    def apply_base_configuration(self) -> None:
-        super().apply_base_configuration()
-        # Botões não têm estado persistente no HA (não usam state_topic)
-        self.removeConfiguration("state_topic")
-
-    def updateState(self, new_state: Optional[Any] = None) -> None:
-        """Sobrescreve para evitar que o botão tente publicar estados inválidos no MQTT."""
-        # Botões não atualizam nem publicam estados, deixamos o método vazio (pass)
+    def on_message(self, client: Any, userdata: Any, msg: Any) -> None:
+        """Contrato do Paho MQTT. Será estendido pela classe filha."""
         pass
 
-    def _on_command_received(self, client, userdata, msg) -> None:
-        payload = msg.payload.decode("utf-8")
-        print(f"🔔 [{self.name}] Botão pressionado via Home Assistant!")
-        # Aqui é onde o seu código agiria para disparar uma ação física real.
+    def print_state(self):
+        logger.info(f"[Device]: {self.domain}.{self.id} -> {self.attributes['state']}")
 
-class SwitchDevice(Device):
-    """Interruptor simples (ON/OFF).
+    def print_attributes(self):
+        attr_str = json.dumps(self.attributes)
+        logger.info(f"[Device]: {self.domain}.{self.id} -> {attr_str}")
 
-    Como a classe base Device já se comporta como um switch por padrão, basta
-    mapear o domínio correto aqui.
-    """
+### LIGHT
+class Light(Device):
+    def __init__(self, id: str, name: str, service: Any, options: Dict[str, Any]) -> None:
+        super().__init__(id, name, service, options)
+        self.domain = "light"
 
-    domain = "switch"
+        if "state" not in self.attributes:
+            self.attributes["state"] = "OFF"
+
+    def turn_on(self) -> None:
+        """Liga a lâmpada mantendo seus atributos anteriores."""
+        self.set_value("state", "ON")
+        self.print_state()
+
+    def turn_off(self) -> None:
+        """Desliga a lâmpada."""
+        self.set_value("state", "OFF")
+        self.print_state()
 
 
-class ClimateDevice(Device):
-    """Dispositivo de Climatização (Ar Condicionado/Termostato)."""
+    def on_message(self, client: Any, userdata: Any, msg: Any) -> None:
+        """Manipula as mensagens recebidas via Paho MQTT, aceitando JSON ou Texto Puro."""
 
-    domain = "climate"
-    optimistic = False
-
-    def post_init(self) -> None:
-        # Atributos padrão iniciais
-        self.options["attributes"].setdefault("state", "off")
-        self.options["attributes"].setdefault("temperature", 22.0)
-
-        # Configurações específicas de Clima para o HA Discovery
-        climate_configs = {
-            "mode_cmd_topic": f"{BASE_ROUTE}/{self.domain}/{self.id}/mode/set",
-            "mode_stat_topic": f"{BASE_ROUTE}/{self.domain}/{self.id}/mode/state",
-            "temperature_command_topic": f"{BASE_ROUTE}/{self.domain}/{self.id}/temp/set",
-            "temperature_state_topic": f"{BASE_ROUTE}/{self.domain}/{self.id}/temp/state",
-            "modes": ["off", "cool", "heat", "fan_only"],
-            "min_temp": 16,
-            "max_temp": 30,
-            "temp_step": 1,
-        }
-
-        # Remove tópicos genéricos da classe base
-        self.removeConfiguration("command_topic")
-        self.removeConfiguration("state_topic")
-
-        self.options["configurations"].update(climate_configs)
-
-    def modeCommandTopic(self) -> str:
-        return self.getConfiguration("mode_cmd_topic", "")
-
-    def modeStateTopic(self) -> str:
-        return self.getConfiguration("mode_stat_topic", "")
-
-    def tempCommandTopic(self) -> str:
-        return self.getConfiguration("temperature_command_topic", "")
-
-    def tempStateTopic(self) -> str:
-        return self.getConfiguration("temperature_state_topic", "")
-
-    def updateState(
-        self,
-        new_state: Optional[Any] = None,
-        new_temp: Optional[float] = None,
-    ) -> None:
-        if new_state is not None:
-            self.addAttribute("state", str(new_state).lower())
-        if new_temp is not None:
-            self.addAttribute("temperature", float(new_temp))
-
-        # Envia as confirmações em tópicos separados conforme o HA espera
-        self.service.publish(
-            self.modeStateTopic(), str(self.getAttribute("state")), retain=True
-        )
-        self.service.publish(
-            self.tempStateTopic(),
-            str(self.getAttribute("temperature")),
-            retain=True,
-        )
-
-    def setup(self) -> None:
-        config_payload = self.options["configurations"].copy()
-        config_payload.pop("discovery_topic", None)
-        self.service.publish(self.discoveryTopic(), config_payload, retain=True)
-
-        # Assina os dois tópicos de comando do clima
-        if self.modeCommandTopic():
-            self.service.subscribe(self.modeCommandTopic(), self._on_mode_received)
-        if self.tempCommandTopic():
-            self.service.subscribe(self.tempCommandTopic(), self._on_temp_received)
-
-        avail_topic = self.getConfiguration("availability_topic")
-        if avail_topic:
-            self.service.publish(avail_topic, "online", retain=True)
-        self.updateState()
-
-    def _on_mode_received(self, client, userdata, msg) -> None:
-        mode = msg.payload.decode("utf-8")
-        print(f"❄️ [{self.name}] Alterar MODO para: {mode}")
-        self.updateState(new_state=mode)
-
-    def _on_temp_received(self, client, userdata, msg) -> None:
-        temp_str = msg.payload.decode("utf-8")
-        print(f"🌡️ [{self.name}] Alterar TEMPERATURA para: {temp_str}°C")
         try:
-            self.updateState(new_state=None, new_temp=float(temp_str))
-        except ValueError:
-            print(f"[Erro] Temperatura inválida: {temp_str}")
+            payload_str = msg.payload.decode("utf-8").strip()
+            
+            # 1. Verifica qual é o schema configurado para esta lâmpada
+            is_json_schema = self.configurations.get("schema") == "json"
 
+            if is_json_schema:
+                data = json.loads(payload_str)
 
-class VacuumDevice(Device):
-    """Aspirador de Pó Robô (MQTT Vacuum)."""
+                if not isinstance(data, dict):
+                    return
 
-    domain = "vacuum"
-    optimistic = False
+                logger.info(f"[HA IN]: '{self.domain}.{self.id}' -> {data}")
 
-    def post_init(self) -> None:
-        # Atributos padrão (estados válidos do HA: cleaning, docked, paused, idle, returning, error)
-        self.options["attributes"].setdefault("state", "docked")
-        self.options["attributes"].setdefault("battery_level", 100)
+                if "state" in data:
+                    self.add_attribute("state", str(data["state"]).upper())
+                if "brightness" in data and self.configurations.get("brightness"):
+                    self.add_attribute("brightness", int(data["brightness"]))
+                if "color" in data:
+                    self.add_attribute("color", data["color"])
+                if "color_temp" in data:
+                    self.add_attribute("color_temp", int(data["color_temp"]))
 
-        vacuum_configs = {
-            "command_topic": f"{BASE_ROUTE}/{self.domain}/{self.id}/command",
-            "state_topic": f"{BASE_ROUTE}/{self.domain}/{self.id}/state",
-            # Lista de recursos que o robô suporta (enviar comandos do painel)
-            "supported_features": [
-                "start",
-                "stop",
-                "pause",
-                "return_home",
-                "status",
-                "battery",
-            ],
-        }
-        self.options["configurations"].update(vacuum_configs)
-
-    def updateState(self, new_state: Optional[Any] = None) -> None:
-        """Envia o estado do aspirador no formato JSON esperado pelo HA."""
-        if new_state is not None:
-            if isinstance(new_state, dict):
-                if "state" in new_state:
-                    self.addAttribute("state", new_state["state"])
-                if "battery_level" in new_state:
-                    self.addAttribute(
-                        "battery_level", int(new_state["battery_level"])
-                    )
+                logger.info(f"[Device]: {self.domain}.{self.id} -> {payload_str}")
+            
             else:
-                self.addAttribute("state", str(new_state).lower())
+                state_str = payload_str.upper()
+                if state_str in ["ON", "OFF"]:
+                    logger.info(f"[HA IN]: '{self.domain}.{self.id}' -> {state_str}")
+                    self.add_attribute("state", state_str)
+                    self.print_state()
+                else:
+                    return
 
-        # O Vacuum no HA lê um JSON com 'status' (ou 'state') e 'battery_level'
-        payload_ha = {
-            "state": self.getAttribute("state"),
-            "battery_level": self.getAttribute("battery_level"),
+            # 2. Sincroniza o novo estado de volta com o Home Assistant
+            self.update()
+
+        except json.JSONDecodeError as e:
+            logger.error(f"Erro de JSON na lâmpada '{self.id}' (Esperava JSON devido ao schema): {e}")
+        except (TypeError, ValueError) as e:
+            logger.error(f"Erro ao processar payload na lâmpada '{self.id}': {e}")
+    
+
+
+class Switch(Device):
+    def __init__(self, id: str, name: str, service: Any, options: Dict[str, Any]) -> None:
+        super().__init__(id, name, service, options)
+        self.domain = "switch"
+
+        if "state" not in self.attributes:
+            self.attributes["state"] = "OFF"
+
+    def turn_on(self) -> None:
+        self.set_value("state", "ON")
+        self.print_state()
+
+    def turn_off(self) -> None:
+        self.set_value("state", "OFF")
+        self.print_state()
+
+    def on_message(self, client: Any, userdata: Any, msg: Any) -> None:
+        try:
+            payload_str = msg.payload.decode("utf-8").strip().upper()
+            if payload_str in ["ON", "OFF"]:
+                logger.info(f"[HA IN]: '{self.domain}.{self.id}' -> {payload_str}")
+                self.add_attribute("state", payload_str)
+                self.print_state()
+                self.update()
+
+        except Exception as e:
+            logger.error(f"Erro no switch '{self.id}': {e}")
+
+
+class Climate(Device):
+    def __init__(self, id: str, name: str, service: Any, options: Dict[str, Any]) -> None:
+        super().__init__(id, name, service, options)
+        self.domain = "climate"
+        
+        # Garante que os atributos essenciais existam na memória
+        if "mode" not in self.attributes: 
+            self.attributes["mode"] = "off"
+        if "temperature" not in self.attributes: 
+            self.attributes["temperature"] = 22.0
+        if "current_temperature" not in self.attributes: 
+            self.attributes["current_temperature"] = 25.0
+
+    def mode_command_topic(self) -> str:
+        return f"homeassistant/{self.domain}/{self.id}/mode/set"
+
+    def temperature_command_topic(self) -> str:
+        return f"homeassistant/{self.domain}/{self.id}/temperature/set"
+
+    def setup(self) -> None:
+        # Configuração simplificada e direta. Removemos os templates complexos do Jinja
+        # e deixamos o HA ler diretamente as chaves do JSON enviado.
+        defaults = {
+            "mode_command_topic": self.mode_command_topic(),
+            "mode_state_topic": self.state_topic(),
+            "mode_state_template": "{{ value_json.mode }}",
+            
+            "temperature_command_topic": self.temperature_command_topic(),
+            "temperature_state_topic": self.state_topic(),
+            "temperature_state_template": "{{ value_json.temperature }}",
+            
+            "current_temperature_topic": self.state_topic(),
+            "current_temperature_template": "{{ value_json.current_temperature }}",
+            
+            "modes": ["off", "heat", "cool", "fan_only"]
         }
-        self.service.publish(self.stateTopic(), payload_ha, retain=True)
+        
+        for key, val in defaults.items():
+            if key not in self.configurations:
+                self.configurations[key] = val
 
-    def _on_command_received(self, client, userdata, msg) -> None:
-        command = msg.payload.decode("utf-8").lower()
-        print(f"🧹 [{self.name}] Comando recebido: {command}")
+        super().setup()
+        self.service.subscribe(self.mode_command_topic(), self.on_mode_message)
+        self.service.subscribe(self.temperature_command_topic(), self.on_temp_message)
 
-        # Mapeia as ações disparadas pelos botões do Home Assistant
-        if command == "start":
-            self.updateState(new_state="cleaning")
-        elif command == "stop" or command == "pause":
-            self.updateState(new_state="paused")
-        elif command == "return_home":
-            self.updateState(new_state="returning")
-
-class SirenDevice(Device):
-    """Controle de Sirenes e Beepers."""
-
-    domain = "siren"
-
-    def apply_base_configuration(self) -> None:
-        super().apply_base_configuration()
-        # Estado inicial padrão da sirene (ON/OFF)
-        self.options["attributes"].setdefault("state", "OFF")
-
-
-class AlarmDevice(Device):
-    """Painel de Controle de Alarme (Alarm Control Panel)."""
-
-    domain = "alarm_control_panel"
-    optimistic = False
-
-    def post_init(self) -> None:
-        # Estados válidos do HA: disarmed, armed_home, armed_away, armed_night, triggering, pending
-        self.options["attributes"].setdefault("state", "disarmed")
-
-        alarm_configs = {
-            "command_topic": f"{BASE_ROUTE}/{self.domain}/{self.id}/set",
-            "state_topic": f"{BASE_ROUTE}/{self.domain}/{self.id}/state",
-            # Define se o alarme exige senha no Home Assistant para ser armado/desarmado
-            # Modifique para 'true' se quiser que o teclado numérico apareça no HA
-            "code_arm_required": False,
-            "code_disarm_required": False,
-            # Se code estiver ativo, você pode definir uma senha estática aqui (ex: "1234")
-            # "code": "1234"
+    def update(self) -> None:
+        """✨ TRATAMENTO ESPECIAL: Sobrescreve o update para garantir o envio do JSON limpo."""
+        payload_data = {
+            "mode": self.attributes.get("mode", "off"),
+            "temperature": float(self.attributes.get("temperature", 22.0)),
+            "current_temperature": float(self.attributes.get("current_temperature", 25.0))
         }
-        self.options["configurations"].update(alarm_configs)
+        # Transmite o JSON stringificado de forma idêntica ao que o HA espera ler
+        self.service.publish(self.state_topic(), json.dumps(payload_data), retain=True)
 
-    def _on_command_received(self, client, userdata, msg) -> None:
-        command = msg.payload.decode("utf-8").upper()
-        # O HA envia comandos como: ARM_HOME, ARM_AWAY, DISARM
-        print(f"🚨 [{self.name}] Comando de segurança recebido: {command}")
+    def on_message(self, client: Any, userdata: Any, msg: Any) -> None:
+        pass
 
-        if command == "ARM_HOME":
-            self.updateState(new_state="armed_home")
-        elif command == "ARM_AWAY":
-            self.updateState(new_state="armed_away")
-        elif command == "DISARM":
-            self.updateState(new_state="disarmed")
+    def on_mode_message(self, client: Any, userdata: Any, msg: Any) -> None:
+        try:
+            payload = msg.payload.decode("utf-8").strip().lower()
+            logger.info(f"[HA IN]: '{self.domain}.{self.id}' (Modo) -> {payload}")
+            
+            # Atualiza o atributo interno e força o envio da confirmação
+            self.add_attribute("mode", payload)
+            self.update() 
+        except Exception as e:
+            logger.error(f"Erro ao mudar modo do climate '{self.id}': {e}")
+
+    def on_temp_message(self, client: Any, userdata: Any, msg: Any) -> None:
+        try:
+            payload = msg.payload.decode("utf-8").strip()
+            temp = float(payload)
+            logger.info(f"[HA IN]: '{self.domain}.{self.id}' (Temp Alvo) -> {temp}°C")
+            
+            # Atualiza o atributo interno e força o envio da confirmação
+            self.add_attribute("temperature", temp)
+            self.update()
+        except Exception as e:
+            logger.error(f"Erro ao setar temperatura do climate '{self.id}': {e}")
 
 
-class DeviceTrackerDevice(Device):
-    """Rastreador de Presença/Dispositivo (Device Tracker)."""
+class Fan(Device):
+    def __init__(self, id: str, name: str, service: Any, options: Dict[str, Any]) -> None:
+        super().__init__(id, name, service, options)
+        self.domain = "fan"
+        if "state" not in self.attributes: self.attributes["state"] = "OFF"
+        if "percentage" not in self.attributes: self.attributes["percentage"] = 0
 
-    domain = "device_tracker"
-    optimistic = False
+    def percentage_command_topic(self) -> str:
+        return f"homeassistant/{self.domain}/{self.id}/percentage/set"
 
-    def apply_base_configuration(self) -> None:
-        super().apply_base_configuration()
-        # Estados válidos padrão do HA: home, not_home
-        self.options["attributes"].setdefault("state", "not_home")
+    def setup(self) -> None:
+        # Configura as chaves de leitura baseadas estritamente no nosso JSON payload
+        if "percentage_command_topic" not in self.configurations:
+            self.configurations["percentage_command_topic"] = self.percentage_command_topic()
+            self.configurations["percentage_state_topic"] = self.state_topic()
+            self.configurations["percentage_value_template"] = "{{ value_json.percentage }}"
+            
+            # Diz ao HA para buscar o estado liga/desliga dentro da chave .state do JSON
+            self.configurations["state_topic"] = self.state_topic()
+            self.configurations["state_value_template"] = "{{ value_json.state }}"
+            
+        super().setup()
+        self.service.subscribe(self.percentage_command_topic(), self.on_percentage_message)
 
-        tracker_configs = {
-            "state_topic": f"{BASE_ROUTE}/{self.domain}/{self.id}/state",
-            # Define o tipo de tracker para o ícone correto no HA (bluetooth, router, gps)
-            "source_type": "router",
+    def update(self) -> None:
+        """✨ TRATAMENTO ESPECIAL: Garante o envio exclusivo do formato JSON esperado."""
+        payload_data = {
+            "state": str(self.attributes.get("state", "OFF")).upper(),
+            "percentage": int(self.attributes.get("percentage", 0))
         }
-        # Remove o command_topic porque a presença é enviada pelo dispositivo, não comandada pelo HA
-        self.removeConfiguration("command_topic")
+        # Envia sempre o dicionário limpo estruturado como string JSON válida
+        self.service.publish(self.state_topic(), json.dumps(payload_data), retain=True)
 
-        self.options["configurations"].update(tracker_configs)
+    def on_message(self, client: Any, userdata: Any, msg: Any) -> None:
+        """Trata o comando básico de Liga/Desliga vindo do HA."""
+        try:
+            payload = msg.payload.decode("utf-8").strip().upper()
+            if payload in ["ON", "OFF"]:
+                logger.info(f"[HA IN]: '{self.domain}.{self.id}' (Power) -> {payload}")
+                
+                self.add_attribute("state", payload)
+                if payload == "OFF":
+                    self.add_attribute("percentage", 0)
+                elif payload == "ON" and self.attributes.get("percentage", 0) == 0:
+                    self.add_attribute("percentage", 33) # Liga na velocidade baixa se estava em zero
+                
+                self.update()
+        except Exception as e:
+            logger.error(f"Erro no power do fan '{self.id}': {e}")
+
+    def on_percentage_message(self, client: Any, userdata: Any, msg: Any) -> None:
+        """Trata a alteração do Slider de velocidade (0-100%)."""
+        try:
+            payload = msg.payload.decode("utf-8").strip()
+            pct = int(payload)
+            logger.info(f"[HA IN]: '{self.domain}.{self.id}' (Speed) -> {pct}%")
+            
+            self.add_attribute("percentage", pct)
+            self.add_attribute("state", "OFF" if pct == 0 else "ON")
+            
+            self.update()
+        except Exception as e:
+            logger.error(f"Erro na velocidade do fan '{self.id}': {e}")
 
 
-class MediaPlayerDevice(Device):
-    """Controle de Mídia (TV, Caixa de Som, Soundbar)."""
+class Sensor(Device):
+    def __init__(self, id: str, name: str, service: Any, options: Dict[str, Any]) -> None:
+        super().__init__(id, name, service, options)
+        self.domain = "sensor"
 
-    domain = "media_player"
-    optimistic = False
+        if "state" not in self.attributes:
+            self.attributes["state"] = "N/A"
 
-    def post_init(self) -> None:
-        # Atributos iniciais do player
-        # Estados do HA: off, on, playing, paused, idle
-        self.options["attributes"].setdefault("state", "off")
-        self.options["attributes"].setdefault("volume_level", 0.5)  # De 0.0 a 1.0
-        self.options["attributes"].setdefault("is_volume_muted", False)
+    def simulate_topic(self) -> str:
+        """Define o tópico de simulação: homeassistant/sensor/id/simulate"""
+        return f"homeassistant/{self.domain}/{self.id}/simulate"
 
-        player_configs = {
-            "command_topic": f"{BASE_ROUTE}/{self.domain}/{self.id}/command",
-            "state_topic": f"{BASE_ROUTE}/{self.domain}/{self.id}/state",
-            # Tópicos extras específicos do HA para receber valores analógicos deslizantes
-            "volume_command_topic": f"{BASE_ROUTE}/{self.domain}/{self.id}/volume/set",
-            # Recursos visíveis no painel do HA
-            "supported_features": [
-                "play",
-                "pause",
-                "stop",
-                "volume_set",
-                "volume_mute",
-                "turn_on",
-                "turn_off",
-            ],
-        }
-        self.options["configurations"].update(player_configs)
+    def setup(self) -> None:
+        # Configura as propriedades do Discovery padrão do HA
+        if "state_value_template" not in self.configurations:
+            self.configurations["state_value_template"] = "{{ value_json.state }}"
+            
+        super().setup()
+        
+        # 📡 Se inscreve no tópico de simulação
+        self.service.subscribe(self.simulate_topic(), self.on_simulate_message)
 
-    def volumeCommandTopic(self) -> str:
-        return self.getConfiguration("volume_command_topic", "")
+    def on_message(self, client: Any, userdata: Any, msg: Any) -> None:
+        # Continua ignorando os comandos normais do HA
+        pass
 
-    def updateState(self, new_state: Optional[Any] = None) -> None:
-        """Monta o payload de estado adaptado para as propriedades do Media Player."""
-        if new_state is not None:
-            if isinstance(new_state, dict):
-                if "state" in new_state:
-                    self.addAttribute("state", new_state["state"])
-                if "volume_level" in new_state:
-                    self.addAttribute(
-                        "volume_level", float(new_state["volume_level"])
-                    )
-                if "is_volume_muted" in new_state:
-                    self.addAttribute(
-                        "is_volume_muted", bool(new_state["is_volume_muted"])
-                    )
+    def on_simulate_message(self, client: Any, userdata: Any, msg: Any) -> None:
+        """Injetor de dados de simulação via terminal."""
+        try:
+            payload_str = msg.payload.decode("utf-8").strip()
+            logger.info(f"[SIMULAÇÃO]: Sensor '{self.id}' injetado com -> {payload_str}")
+            
+            # Tenta converter para número (int/float) se aplicável, senão mantém string
+            try:
+                if "." in payload_str:
+                    val = float(payload_str)
+                else:
+                    val = int(payload_str)
+            except ValueError:
+                val = payload_str
+                
+            self.add_attribute("state", val)
+            self.update() # Envia para o HA ler o novo valor gerado
+        except Exception as e:
+            logger.error(f"Erro ao processar simulação no sensor '{self.id}': {e}")
+
+class BinarySensor(Device):
+    def __init__(self, id: str, name: str, service: Any, options: Dict[str, Any]) -> None:
+        super().__init__(id, name, service, options)
+        self.domain = "binary_sensor"
+
+        if "state" not in self.attributes:
+            self.attributes["state"] = "OFF"
+
+        self.configurations["schema"] = "json"
+
+    def simulate_topic(self) -> str:
+        return f"homeassistant/{self.domain}/{self.id}/simulate"
+
+    def setup(self) -> None:
+        if "value_template" not in self.configurations:
+            self.configurations["value_template"] = "{{ value_json.state }}"
+            
+        super().setup()
+        
+        # 📡 Se inscreve no tópico de simulação
+        self.service.subscribe(self.simulate_topic(), self.on_simulate_message)
+
+    def on_message(self, client: Any, userdata: Any, msg: Any) -> None:
+        pass
+
+    def on_simulate_message(self, client: Any, userdata: Any, msg: Any) -> None:
+        """Injetor de estados binários (ON/OFF) via terminal."""
+        try:
+            payload_str = msg.payload.decode("utf-8").strip().upper()
+            
+            if payload_str in ["ON", "OFF"]:
+                logger.info(f"[SIMULAÇÃO]: Binary Sensor '{self.id}' alterado para -> {payload_str}")
+                self.add_attribute("state", payload_str)
+                self.update()
             else:
-                self.addAttribute("state", str(new_state).lower())
+                logger.warning(f"Payload de simulação inválido para binary_sensor: {payload_str}. Use ON ou OFF.")
+        except Exception as e:
+            logger.error(f"Erro ao processar simulação no binary_sensor '{self.id}': {e}")
 
-        # O Media Player no HA prefere receber suas propriedades unificadas em JSON
-        payload_ha = {
-            "state": self.getAttribute("state"),
-            "volume_level": self.getAttribute("volume_level"),
-            "is_volume_muted": self.getAttribute("is_volume_muted"),
-        }
-        self.service.publish(self.stateTopic(), payload_ha, retain=True)
 
-    def setup(self) -> None:
-        """Estende o setup para assinar também o tópico exclusivo de volume."""
-        super().setup()
-        if self.volumeCommandTopic():
-            self.service.subscribe(
-                self.volumeCommandTopic(), self._on_volume_received
-            )
+class Energy(Device):
+    def __init__(self, id: str, name: str, service: Any, options: Dict[str, Any]) -> None:
+        super().__init__(id, name, service, options)
+        self.domain = "sensor"  # No HA MQTT Discovery, energy é uma subclasse de sensor
+        if "state" not in self.attributes: self.attributes["state"] = 0.0  # kWh
+        if "power" not in self.attributes: self.attributes["power"] = 0.0    # W
 
-    def _on_command_received(self, client, userdata, msg) -> None:
-        command = msg.payload.decode("utf-8").lower()
-        print(f"🎬 [{self.name}] Comando de mídia recebido: {command}")
+    def on_message(self, client: Any, userdata: Any, msg: Any) -> None:
+        pass
 
-        if command == "turn_on":
-            self.updateState(new_state="idle")
-        elif command == "turn_off":
-            self.updateState(new_state="off")
-        elif command == "play":
-            self.updateState(new_state="playing")
-        elif command == "pause":
-            self.updateState(new_state="paused")
-        elif command == "stop":
-            self.updateState(new_state="idle")
-        elif command == "mute":
-            # Inverte o estado atual do mute se receber o comando puro de alternância
-            current_mute = self.getAttribute("is_volume_muted", False)
-            self.updateState(new_state={"is_volume_muted": not current_mute})
+class Cover(Device):
+    def __init__(self, id: str, name: str, service: Any, options: Dict[str, Any]) -> None:
+        super().__init__(id, name, service, options)
+        self.domain = "cover"
 
-    def _on_volume_received(self, client, userdata, msg) -> None:
-        volume_str = msg.payload.decode("utf-8")
-        print(f"🔊 [{self.name}] Ajustar volume para: {volume_str}")
+        if "state" not in self.attributes: self.attributes["state"] = "closed"
+        if "position" not in self.attributes: self.attributes["position"] = 0
+
+    def on_message(self, client: Any, userdata: Any, msg: Any) -> None:
         try:
-            # O HA envia valores de volume de 0.0 a 1.0 (ex: 0.35 para 35%)
-            self.updateState(new_state={"volume_level": float(volume_str)})
-        except ValueError:
-            print(f"[Erro] Volume inválido: {volume_str}")
+            payload_str = msg.payload.decode("utf-8").strip().upper()
+            logger.info(f"[HA IN]: '{self.domain}.{self.id}' -> {payload_str}")
+            
+            if payload_str == "OPEN":
+                self.add_attribute("state", "open")
+                self.add_attribute("position", 100)
+                self.print_attributes()
+            elif payload_str == "CLOSE":
+                self.add_attribute("state", "closed")
+                self.add_attribute("position", 0)
+                self.print_attributes()
+            elif payload_str == "STOP":
+                self.add_attribute("state", "stopped")
+                self.print_attributes()
+                
+            self.update()
+        except Exception as e:
+            logger.error(f"Erro no cover '{self.id}': {e}")
 
+    def open(self):
+        self.add_attribute("state", "open")
+        self.add_attribute("position", 100)
+        self.print_attributes()
+        self.update()
 
-class SelectDevice(Device):
-    """Seletor de Opções (Dropdown Input Select).
-    
-    Útil para mudar modos de automação (ex: "Festa", "Cinema", "Trabalho").
-    """
-    domain = "select"
-    optimistic = False
+    def close(self):
+        self.add_attribute("state", "closed")
+        self.add_attribute("position", 0)
+        self.print_attributes()
+        self.update()
 
-    def post_init(self) -> None:
-        # Pega a lista de opções do arquivo de configuração ou deixa uma padrão
-        self.options["configurations"].setdefault("options", ["Opção 1", "Opção 2"])
-        self.options["attributes"].setdefault("state", self.getConfiguration("options")[0])
+    def stop(self):
+        self.add_attribute("state", "stopped")
+        self.print_attributes()
+        self.update()
 
-    def _on_command_received(self, client, userdata, msg) -> None:
-        opcao_selecionada = msg.payload.decode("utf-8")
-        print(f"🎛️ [{self.name}] Nova opção selecionada no HA: {opcao_selecionada}")
-        
-        if opcao_selecionada in self.getConfiguration("options"):
-            self.updateState(new_state=opcao_selecionada)
+class Lock(Device):
+    def __init__(self, id: str, name: str, service: Any, options: Dict[str, Any]) -> None:
+        super().__init__(id, name, service, options)
+        self.domain = "lock"
 
+        if "state" not in self.attributes:
+            self.attributes["state"] = "LOCKED"
 
-class NumberDevice(Device):
-    """Controle Deslizante Numérico (Slider / Input Number).
-    
-    Útil para definir variáveis como 'Tempo de tolerância do alarme' ou 'Volume do Bip'.
-    """
-    domain = "number"
-    optimistic = False
-
-    def post_init(self) -> None:
-        self.options["attributes"].setdefault("state", 10.0)
-        self.options["configurations"].setdefault("min", 0)
-        self.options["configurations"].setdefault("max", 100)
-        self.options["configurations"].setdefault("step", 1)
-
-    def _on_command_received(self, client, userdata, msg) -> None:
-        valor_str = msg.payload.decode("utf-8")
-        print(f"🔢 [{self.name}] Slider movido para: {valor_str}")
+    def on_message(self, client: Any, userdata: Any, msg: Any) -> None:
         try:
-            self.updateState(new_state=float(valor_str))
-        except ValueError:
-            pass
+            payload_str = msg.payload.decode("utf-8").strip().upper()
+            logger.info(f"[HA IN]: '{self.domain}.{self.id}' -> {payload_str}")
+            
+            if payload_str in ["LOCK", "UNLOCK"]:
+                # Traduz comando em estado estável do HA (Locked / Unlocked)
+                target_state = "LOCKED" if payload_str == "LOCK" else "UNLOCKED"
+                self.add_attribute("state", target_state)
+                self.print_state()
+                self.update()
+        except Exception as e:
+            logger.error(f"Erro no lock '{self.id}': {e}")
 
+    def lock(self):
+        if (self.get_attribute("state") == "LOCKED"):
+            return
 
-class HumidifierDevice(Device):
-    """Controle de Umidificadores e Desumidificadores de Ar."""
-    domain = "humidifier"
-    optimistic = False
+        self.set_value("state", "LOCKED")
+        self.print_state()
 
-    def post_init(self) -> None:
-        self.options["attributes"].setdefault("state", "off") # on / off
-        self.options["attributes"].setdefault("humidity", 45)  # Alvo %
-        
-        humidifier_configs = {
-            "mode_command_topic": f"{BASE_ROUTE}/{self.domain}/{self.id}/mode/set",
-            "mode_state_topic": f"{BASE_ROUTE}/{self.domain}/{self.id}/mode/state",
-            "target_humidity_command_topic": f"{BASE_ROUTE}/{self.domain}/{self.id}/humidity/set",
-            "target_humidity_state_topic": f"{BASE_ROUTE}/{self.domain}/{self.id}/humidity/state",
-            "modes": ["normal", "eco", "boost"],
-            "min_humidity": 30,
-            "max_humidity": 80
-        }
-        self.options["configurations"].update(humidifier_configs)
+    def unlock(self):
+        if (self.get_attribute("state") == "UNLOCKED"):
+            return
 
-    def updateState(self, new_state: Optional[Any] = None, new_humidity: Optional[int] = None) -> None:
-        if new_state is not None:
-            self.addAttribute("state", str(new_state).lower())
-        if new_humidity is not None:
-            self.addAttribute("humidity", int(new_humidity))
+        self.set_value("state", "UNLOCKED")
+        self.print_state()
 
-        # Envia o liga/desliga e a umidade alvo em tópicos separados
-        self.service.publish(self.stateTopic(), str(self.state()), retain=True)
-        
-        h_topic = self.getConfiguration("target_humidity_state_topic")
-        if h_topic:
-            self.service.publish(h_topic, str(self.getAttribute("humidity")), retain=True)
+class Button(Device):
+    def __init__(self, id: str, name: str, service: Any, options: Dict[str, Any]) -> None:
+        super().__init__(id, name, service, options)
+        self.domain = "button"
+
+    def on_message(self, client: Any, userdata: Any, msg: Any) -> None:
+        try:
+            payload_str = msg.payload.decode("utf-8").strip()
+            logger.info(f"[HA IN]: '{self.domain}.{self.id}' -> {payload_str}")
+            # Botões respondem instantaneamente a um pulso, sem guardar estado fixo interno.
+            if hasattr(self, "on_press") and callable(getattr(self, "on_press")):
+                self.on_press()
+
+        except Exception as e:
+            logger.error(f"Erro no button '{self.id}': {e}")
+
+    def on_press(self):
+        logger.info(f"[Device]: {self.domain}.{self.id} -> PRESSED")
+
+class Vacuum(Device):
+    def __init__(self, id: str, name: str, service: Any, options: Dict[str, Any]) -> None:
+        super().__init__(id, name, service, options)
+        self.domain = "vacuum"
+        self.configurations["schema"] = "json"
+
+        if "state" not in self.attributes: self.attributes["state"] = "docked"
+        if "battery_level" not in self.attributes: self.attributes["battery_level"] = 100
+
 
     def setup(self) -> None:
+        # Define os recursos e mapeamentos que liberam os botões no painel do HA
+        if "supported_features" not in self.configurations:
+            self.configurations["supported_features"] = [
+                "start", "pause", "stop", "return_home", "status"
+            ]
+
+            self.configurations["state_topic"] = self.state_topic()
+            # Mapeia onde o HA vai ler a string de estado pura dentro do nosso JSON de atributos
+            #self.configurations["state_template"] = "{{ value_json.state }}"
+            #self.configurations["battery_level_topic"] = self.state_topic()
+            #self.configurations["battery_level_template"] = "{{ value_json.battery_level }}"
+
         super().setup()
-        h_cmd = self.getConfiguration("target_humidity_command_topic")
-        if h_cmd:
-            self.service.subscribe(h_cmd, self._on_humidity_received)
 
-    def _on_humidity_received(self, client, userdata, msg) -> None:
-        h_str = msg.payload.decode("utf-8")
-        print(f"💧 [{self.name}] Alterar umidade alvo para: {h_str}%")
-        self.updateState(new_humidity=int(h_str))
+    def on_message(self, client: Any, userdata: Any, msg: Any) -> None:
+        """Intercepta os comandos de ação enviados pelos botões do painel do HA."""
+        try:
+            payload = msg.payload.decode("utf-8").strip().lower()
+            logger.info(f"[HA IN]: '{self.domain}.{self.id}' (Comando Vacuum) -> {payload}")
+            
+            # Máquina de estados básica de transição do aspirador robô
+            if payload == "start":
+                self.add_attribute("state", "cleaning")
+            elif payload == "pause":
+                self.add_attribute("state", "paused")
+            elif payload == "stop":
+                self.add_attribute("state", "idle")
+            elif payload == "return_to_base":
+                self.add_attribute("state", "returning")
+                
+            self.print_state()
 
+            self.update()
+        except Exception as e:
+            logger.error(f"Erro ao processar comando no vacuum '{self.id}': {e}")
 
-class WaterHeaterDevice(Device):
-    """Controle de Aquecedores de Água, Boilers e Banheiras de Hidromassagem."""
-    domain = "water_heater"
-    optimistic = False
+    def start(self):
+        self.set_value("state", "cleaning")
+        self.print_state()
 
-    def post_init(self) -> None:
-        self.options["attributes"].setdefault("state", "eco") # modo atual
-        self.options["attributes"].setdefault("temperature", 45.0) # temperatura atual da água
-        
-        heater_configs = {
-            "mode_command_topic": f"{BASE_ROUTE}/{self.domain}/{self.id}/mode/set",
-            "mode_state_topic": f"{BASE_ROUTE}/{self.domain}/{self.id}/mode/state",
-            "temperature_command_topic": f"{BASE_ROUTE}/{self.domain}/{self.id}/temp/set",
-            "temperature_state_topic": f"{BASE_ROUTE}/{self.domain}/{self.id}/temp/state",
-            "modes": ["off", "eco", "electric", "gas"],
-            "min_temp": 30,
-            "max_temp": 65
-        }
-        self.options["configurations"].update(heater_configs)
+    def pause(self):
+        self.set_value("state", "paused")
+        self.print_state()
 
-    def updateState(self, new_state: Optional[Any] = None, new_temp: Optional[float] = None) -> None:
-        if new_state is not None:
-            self.addAttribute("state", str(new_state).lower())
-        if new_temp is not None:
-            self.addAttribute("temperature", float(new_temp))
+    def stop(self):
+        self.set_value("state", "idle")
+        self.print_state()
 
-        # Publica estado e temperatura
-        self.service.publish(self.getConfiguration("mode_state_topic"), str(self.state()), retain=True)
-        self.service.publish(self.getConfiguration("temperature_state_topic"), str(self.getAttribute("temperature")), retain=True)
+    def return_home(self):
+        self.set_value("state", "returning")
+        self.print_state()
+
+    def print_state(self):
+        logger.info(f"[Device]: {self.domain}.{self.id} -> {self.attributes['state']}")
+
+class Siren(Device):
+    def __init__(self, id: str, name: str, service: Any, options: Dict[str, Any]) -> None:
+        super().__init__(id, name, service, options)
+        self.domain = "siren"
+
+        self.configurations["schema"] = "json"
+
+        if "state" not in self.attributes:
+            self.attributes["state"] = "OFF"
+
+    def on_message(self, client: Any, userdata: Any, msg: Any) -> None:
+        try:
+            decoded_payload = msg.payload.decode("utf-8").strip() #.upper()
+            payload = json.loads(decoded_payload)
+            payload_str = payload.get("state", "")
+
+            logger.info(f"[HA IN]: '{self.domain}.{self.id}' -> {payload_str}")
+
+            if payload_str in ["ON", "OFF"]:
+                self.add_attribute("state", payload_str)
+                self.print_state()
+                self.update()
+        except Exception as e:
+            logger.error(f"Erro na siren '{self.id}': {e}")
+
+    def turn_on(self):
+        self.set_value("state", "ON")
+        self.print_state()
+
+    def turn_off(self):
+        self.set_value("state", "OFF")
+        self.print_state()
+
+class Alarm(Device):
+    def __init__(self, id: str, name: str, service: Any, options: Dict[str, Any]) -> None:
+        super().__init__(id, name, service, options)
+        self.domain = "alarm_control_panel"
+        if "state" not in self.attributes:
+            self.attributes["state"] = "disarmed"
 
     def setup(self) -> None:
-        config_payload = self.options["configurations"].copy()
-        config_payload.pop("discovery_topic", None)
-        self.service.publish(self.discoveryTopic(), config_payload, retain=True)
+        # Configurações obrigatórias para o painel de alarme do HA
+        if "state_topic" not in self.configurations:
+            self.configurations["state_topic"] = self.state_topic()
+            self.configurations["state_template"] = "{{ value_json.state }}"
+            
+            # ✨ Remove a obrigatoriedade de digitar código/senha na interface do HA
+            self.configurations["code_arm_required"] = False
+            self.configurations["code_disarm_required"] = False
+            
+        super().setup()
+    
+    def on_message(self, client: Any, userdata: Any, msg: Any) -> None:
+        try:
+            payload_str = msg.payload.decode("utf-8").strip().lower()
+            logger.info(f"[HA IN]: '{self.domain}.{self.id}' -> Solicitado: {payload_str}")
+            
+            # Mapeamento padrão de comandos recebidos para estados do HA
+            alarm_states = {
+                "disarm": "disarmed", "arm_home": "armed_home", 
+                "arm_away": "armed_away", "arm_night": "armed_night"
+            }
+            if payload_str in alarm_states:
+                self.add_attribute("state", alarm_states[payload_str])
+                self.update()
+        except Exception as e:
+            logger.error(f"Erro no alarme '{self.id}': {e}")
 
-        self.service.subscribe(self.getConfiguration("mode_command_topic"), self._on_command_received)
-        self.service.subscribe(self.getConfiguration("temperature_command_topic"), self._on_temp_received)
+class DeviceTracker(Device):
+    def __init__(self, id: str, name: str, service: Any, options: Dict[str, Any]) -> None:
+        super().__init__(id, name, service, options)
+        self.domain = "device_tracker"
+        if "state" not in self.attributes:
+            self.attributes["state"] = "not_home"
 
-        avail_topic = self.getConfiguration("availability_topic")
-        if avail_topic:
-            self.service.publish(avail_topic, "online", retain=True)
-        self.updateState()
+    def simulate_topic(self) -> str:
+        """Define o canal de simulação: homeassistant/device_tracker/id/simulate"""
+        return f"homeassistant/{self.domain}/{self.id}/simulate"
 
-    def _on_temp_received(self, client, userdata, msg) -> None:
-        temp_str = msg.payload.decode("utf-8")
-        print(f"🔥 [{self.name}] Ajustar temperatura do boiler para: {temp_str}°C")
-        self.updateState(new_temp=float(temp_str))
+    def setup(self) -> None:
+        # Configurações do Discovery para monitoramento de estado textual puro
+        if "state_topic" not in self.configurations:
+            self.configurations["state_topic"] = self.state_topic()
+            
+            # Mapeia explicitamente as strings que o HA deve interpretar
+            self.configurations["payload_home"] = "home"
+            self.configurations["payload_not_home"] = "not_home"
+            
+        super().setup()
+        
+        # 📡 Escuta a rota de simulação dedicada
+        self.service.subscribe(self.simulate_topic(), self.on_simulate_message)
+
+    def update(self) -> None:
+        """✨ TRATAMENTO ESPECIAL: Envia apenas a string pura de estado.
+        
+        Diferente de outros dispositivos que usam JSON, o device_tracker de estado 
+        estático do HA prefere receber o payload textual bruto no state_topic.
+        """
+        state_str = str(self.attributes.get("state", "not_home")).lower()
+        self.service.publish(self.state_topic(), state_str, retain=True)
+
+    def on_message(self, client: Any, userdata: Any, msg: Any) -> None:
+        # Ignora comandos normais do HA
+        pass
+
+    def on_simulate_message(self, client: Any, userdata: Any, msg: Any) -> None:
+        """Muda o estado de presença baseado no comando do terminal."""
+        try:
+            payload_str = msg.payload.decode("utf-8").strip().lower()
+            
+            if payload_str in ["home", "not_home"]:
+                logger.info(f"[SIMULAÇÃO PRESENÇA]: Tracker '{self.id}' alterado para -> {payload_str}")
+                self.add_attribute("state", payload_str)
+                self.update()
+            else:
+                logger.warning(f"Payload inválido para device_tracker. Use apenas 'home' ou 'not_home'.")
+        except Exception as e:
+            logger.error(f"Erro ao processar simulação no device_tracker '{self.id}': {e}")
+
+
+class Humidifier(Device):
+    def __init__(self, id: str, name: str, service: Any, options: Dict[str, Any]) -> None:
+        super().__init__(id, name, service, options)
+        self.domain = "humidifier"
+        if "state" not in self.attributes: 
+            self.attributes["state"] = "OFF"
+        if "target_humidity" not in self.attributes: 
+            self.attributes["target_humidity"] = 40
+
+    def target_humidity_command_topic(self) -> str:
+        return f"homeassistant/{self.domain}/{self.id}/target_humidity/set"
+
+    def target_humidity_state_topic(self) -> str:
+        """✨ NOVO: Tópico exclusivo para o estado da umidade, evitando conflito no HA."""
+        return f"homeassistant/{self.domain}/{self.id}/target_humidity/state"
+
+    def setup(self) -> None:
+        # Chaves corrigidas seguindo estritamente a documentação MQTT Humidifier do HA
+        if "target_humidity_command_topic" not in self.configurations:
+            self.configurations["target_humidity_command_topic"] = self.target_humidity_command_topic()
+            
+            # Aponta para o tópico exclusivo de umidade e usa a chave de template CORRETA
+            self.configurations["target_humidity_state_topic"] = self.target_humidity_state_topic()
+            self.configurations["target_humidity_state_template"] = "{{ value_json.target_humidity }}"
+            
+            # Configuração do Power (Liga/Desliga) no tópico principal
+            self.configurations["state_topic"] = self.state_topic()
+            self.configurations["state_value_template"] = "{{ value_json.state }}"
+            
+        super().setup()
+        
+        self.service.subscribe(self.command_topic(), self.on_message)
+        self.service.subscribe(self.target_humidity_command_topic(), self.on_humidity_message)
+
+    def update(self) -> None:
+        """✨ TRATAMENTO ESPECIAL: Publica nos dois tópicos de forma isolada."""
+        payload_power = {
+            "state": str(self.attributes.get("state", "OFF")).upper()
+        }
+        payload_humidity = {
+            "target_humidity": int(self.attributes.get("target_humidity", 40))
+        }
+        
+        # Envia o estado de energia para o state_topic
+        self.service.publish(self.state_topic(), json.dumps(payload_power), retain=True)
+        
+        # Envia o estado do slider para o target_humidity_state_topic
+        self.service.publish(self.target_humidity_state_topic(), json.dumps(payload_humidity), retain=True)
+
+    def on_message(self, client: Any, userdata: Any, msg: Any) -> None:
+        try:
+            payload = msg.payload.decode("utf-8").strip().upper()
+            if payload in ["ON", "OFF"]:
+                logger.info(f"[HA IN]: '{self.domain}.{self.id}' (Power) -> {payload}")
+                self.add_attribute("state", payload)
+                self.update()
+        except Exception as e:
+            logger.error(f"Erro no controle de energia do humidifier '{self.id}': {e}")
+
+    def on_humidity_message(self, client: Any, userdata: Any, msg: Any) -> None:
+        try:
+            payload = msg.payload.decode("utf-8").strip()
+            humidity_val = int(payload)
+            logger.info(f"[HA IN]: '{self.domain}.{self.id}' (Umidade Alvo) -> {humidity_val}%")
+            
+            self.add_attribute("target_humidity", humidity_val)
+            self.update()
+        except Exception as e:
+            logger.error(f"Erro ao mudar umidade alvo no humidifier '{self.id}': {e}")
+
+class WaterHeater(Device):
+    def __init__(self, id: str, name: str, service: Any, options: Dict[str, Any]) -> None:
+        super().__init__(id, name, service, options)
+        self.domain = "water_heater"
+        # Atributos internos padrão esperados pelo HA
+        if "state" not in self.attributes: 
+            self.attributes["state"] = "eco"  # No water_heater, o estado principal é o modo
+        if "temperature" not in self.attributes: 
+            self.attributes["temperature"] = 45.0
+        if "current_temperature" not in self.attributes: 
+            self.attributes["current_temperature"] = 39.0
+
+    def mode_command_topic(self) -> str:
+        return f"homeassistant/{self.domain}/{self.id}/mode/set"
+
+    def temperature_command_topic(self) -> str:
+        return f"homeassistant/{self.domain}/{self.id}/temperature/set"
+
+    def setup(self) -> None:
+        # Chaves oficiais da documentação MQTT Water Heater do Home Assistant
+        defaults = {
+            "mode_command_topic": self.mode_command_topic(),
+            "mode_state_topic": self.state_topic(),
+            "mode_state_template": "{{ value_json.state }}",
+            
+            "temperature_command_topic": self.temperature_command_topic(),
+            "temperature_state_topic": self.state_topic(),
+            "temperature_state_template": "{{ value_json.temperature }}",
+            
+            "current_temperature_topic": self.state_topic(),
+            "current_temperature_template": "{{ value_json.current_temperature }}",
+            
+            # Lista de modos que aparecerão no seletor do painel do HA
+            "modes": ["off", "eco", "electric", "gas", "heat_pump"]
+        }
+        
+        for key, val in defaults.items():
+            if key not in self.configurations:
+                self.configurations[key] = val
+
+        super().setup()
+        
+        # 📡 Se inscreve nos tópicos específicos criados para o HA interagir
+        self.service.subscribe(self.mode_command_topic(), self.on_mode_message)
+        self.service.subscribe(self.temperature_command_topic(), self.on_temp_message)
+
+    def update(self) -> None:
+        """✨ TRATAMENTO ESPECIAL: Envia o payload JSON perfeitamente limpo."""
+        payload_data = {
+            "state": str(self.attributes.get("state", "eco")).lower(),
+            "temperature": float(self.attributes.get("temperature", 45.0)),
+            "current_temperature": float(self.attributes.get("current_temperature", 39.0))
+        }
+        self.service.publish(self.state_topic(), json.dumps(payload_data), retain=True)
+
+    def on_message(self, client: Any, userdata: Any, msg: Any) -> None:
+        # Desativado pois o water_heater usa sub-tópicos granulares mapeados abaixo
+        pass
+
+    def on_mode_message(self, client: Any, userdata: Any, msg: Any) -> None:
+        """Captura a mudança de modo (ex: ECO, GAS, OFF) enviada pelo HA."""
+        try:
+            payload = msg.payload.decode("utf-8").strip().lower()
+            logger.info(f"[HA IN]: '{self.domain}.{self.id}' (Modo) -> {payload}")
+            
+            self.add_attribute("state", payload)
+            self.update() # Devolve o JSON confirmando para o botão fixar na tela
+        except Exception as e:
+            logger.error(f"Erro ao mudar modo do water_heater '{self.id}': {e}")
+
+    def on_temp_message(self, client: Any, userdata: Any, msg: Any) -> None:
+        """Captura o ajuste de temperatura do termostato enviado pelo HA."""
+        try:
+            payload = msg.payload.decode("utf-8").strip()
+            temp = float(payload)
+            logger.info(f"[HA IN]: '{self.domain}.{self.id}' (Temp Alvo) -> {temp}°C")
+            
+            self.add_attribute("temperature", temp)
+            self.update() # Devolve a confirmação de temperatura para fixar o slider
+        except Exception as e:
+            logger.error(f"Erro ao mudar temperatura do water_heater '{self.id}': {e}")
+
+#class MediaPlayer(Device):
+#    def __init__(self, id: str, name: str, service: Any, options: Dict[str, Any]) -> None:
+#        super().__init__(id, name, service, options)
+#        self.domain = "media_player"
+#        if "state" not in self.attributes: self.attributes["state"] = "off"
+#        if "volume_level" not in self.attributes: self.attributes["volume_level"] = 0.5
+#
+#    def on_message(self, client: Any, userdata: Any, msg: Any) -> None:
+#        try:
+#            payload_str = msg.payload.decode("utf-8").strip()
+#            if payload_str.startswith("{"):
+#                data = json.loads(payload_str)
+#                if "state" in data: self.add_attribute("state", str(data["state"]).lower())
+#                if "volume_level" in data: self.add_attribute("volume_level", float(data["volume_level"]))
+#            else:
+#                cmd = payload_str.lower()
+#                if cmd in ["off", "on", "play", "pause"]:
+#                    self.add_attribute("state", "idle" if cmd == "on" else cmd)
+#            
+#            logger.info(f"[HA IN]: '{self.domain}.{self.id}' -> {self.attributes}")
+#            self.update()
+#        except Exception as e:
+#            logger.error(f"Erro no media_player '{self.id}': {e}")
+
+#class Select(Device):
+#    def __init__(self, id: str, name: str, service: Any, options: Dict[str, Any]) -> None:
+#        super().__init__(id, name, service, options)
+#        self.domain = "select"
+#        if "state" not in self.attributes:
+#            self.attributes["state"] = "Opção 1"
+#
+#    def on_message(self, client: Any, userdata: Any, msg: Any) -> None:
+#        try:
+#            payload_str = msg.payload.decode("utf-8").strip()
+#            logger.info(f"[HA IN]: '{self.domain}.{self.id}' -> Selecionado: {payload_str}")
+#            self.add_attribute("state", payload_str)
+#            self.update()
+#        except Exception as e:
+#            logger.error(f"Erro no select '{self.id}': {e}")
+
+#class Number(Device):
+#    def __init__(self, id: str, name: str, service: Any, options: Dict[str, Any]) -> None:
+#        super().__init__(id, name, service, options)
+#        self.domain = "number"
+#        if "state" not in self.attributes:
+#            self.attributes["state"] = 0.0
+#
+#    def on_message(self, client: Any, userdata: Any, msg: Any) -> None:
+#        try:
+#            payload_str = msg.payload.decode("utf-8").strip()
+#            logger.info(f"[HA IN]: '{self.domain}.{self.id}' -> Novo Valor: {payload_str}")
+#            val = float(payload_str)
+#            self.add_attribute("state", int(val) if val.is_integer() else val)
+#            self.update()
+#        except Exception as e:
+#            logger.error(f"Erro no number '{self.id}': {e}")
+#
