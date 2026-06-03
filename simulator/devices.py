@@ -752,6 +752,10 @@ class Humidifier(Device):
         return f"homeassistant/{self.domain}/{self.id}/target_humidity/state"
 
     def setup(self) -> None:
+
+        if "device_class" not in self.configurations:
+            self.configurations["device_class"] = "humidifier" # dehumidifier
+
         # Chaves corrigidas seguindo estritamente a documentação MQTT Humidifier do HA
         if "target_humidity_command_topic" not in self.configurations:
             self.configurations["target_humidity_command_topic"] = self.target_humidity_command_topic()
@@ -804,6 +808,23 @@ class Humidifier(Device):
             self.update()
         except Exception as e:
             logger.error(f"Erro ao mudar umidade alvo no humidifier '{self.id}': {e}")
+
+
+    def turn_on(self):
+        pass
+
+    def turn_off(self):
+        pass
+
+    def toggle(self):
+        pass
+
+    def set_mode(self):
+        pass
+
+    def set_humidity(self):
+        pass
+
 
 class WaterHeater(Device):
     def __init__(self, id: str, name: str, service: Any, options: Dict[str, Any]) -> None:
@@ -909,6 +930,8 @@ class WaterHeater(Device):
     def turn_off(self):
         pass
 
+    def toggle(self):
+        pass
 
 #class MediaPlayer(Device):
 #    def __init__(self, id: str, name: str, service: Any, options: Dict[str, Any]) -> None:
