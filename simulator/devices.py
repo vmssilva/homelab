@@ -112,7 +112,7 @@ class Device:
         logger.info(f"[Device]: {self.domain}.{self.id} -> {attr_str}")
 
 
-    def is_states(self, key: str, value: Any) -> bool:
+    def is_attr(self, key: str, value: Any) -> bool:
         return self.attributes[key] == value
 
 ### LIGHT
@@ -595,7 +595,11 @@ class Vacuum(Device):
                 self.stop()
             elif payload == "return_to_base":
                 self.return_to_base()
-                
+            elif payload == "on":
+                self.turn_on()
+            elif payload == "off":
+                self.turn_off()
+
         except Exception as e:
             logger.error(f"Erro ao processar comando no vacuum '{self.id}': {e}")
 
@@ -617,24 +621,17 @@ class Vacuum(Device):
 
     def turn_on(self):
         self.set_value("state", "ON")
-        self.print_state()
+        self.start()
 
     def turn_off(self):
         self.set_value("state", "OFF")
-        self.print_state()
+        self.stop()
 
     def toggle(self):
-        state = "ON" if self.attributes["state"] == "OFF" else "OFF"
-        self.set_value("state", state)
-        self.print_state()
+        self.turn_on() if self.is_attr("state", "OFF") else self.turn_off()
 
     def start_pause(self):
-        if self.is_states("state", "paused"):
-            self.start()
-            return
-
-        if self.is_states("state", "cleaning"):
-            self.pause()
+        self.pause if self.is_attr("state", "cleaning") else self.start()
 
     def set_fan_speed(self):
         pass
@@ -686,9 +683,7 @@ class Siren(Device):
         self.print_state()
 
     def toggle(self):
-        state = "ON" if self.attributes["state"] == "OFF" else "OFF"
-        self.set_value("state", state)
-        self.print_state()
+        self.turn_on() if self.is_attr("state", "OFF") else self.turn_off()
 
 class Alarm(Device):
     def __init__(self, id: str, name: str, service: Any, options: Dict[str, Any]) -> None:
