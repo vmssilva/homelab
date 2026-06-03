@@ -1,7 +1,7 @@
 broker: "localhost"
 devices:
-  - type: alarm_control_panel
-    id: alarm
+  - type: vacuum
+    id: vacuum
 
   #- type: "light"
   #  id: "kitchen"

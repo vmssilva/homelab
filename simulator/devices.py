@@ -111,6 +111,10 @@ class Device:
         attr_str = json.dumps(self.attributes)
         logger.info(f"[Device]: {self.domain}.{self.id} -> {attr_str}")
 
+
+    def is_states(self, key: str, value: Any) -> bool:
+        return self.attributes[key] == value
+
 ### LIGHT
 class Light(Device):
     def __init__(self, id: str, name: str, service: Any, options: Dict[str, Any]) -> None:
@@ -570,9 +574,9 @@ class Vacuum(Device):
 
             self.configurations["state_topic"] = self.state_topic()
             # Mapeia onde o HA vai ler a string de estado pura dentro do nosso JSON de atributos
-            #self.configurations["state_template"] = "{{ value_json.state }}"
-            #self.configurations["battery_level_topic"] = self.state_topic()
-            #self.configurations["battery_level_template"] = "{{ value_json.battery_level }}"
+            self.configurations["state_template"] = "{{ value_json.state }}"
+            self.configurations["battery_level_topic"] = self.state_topic()
+            self.configurations["battery_level_template"] = "{{ value_json.battery_level }}"
 
         super().setup()
 
@@ -584,17 +588,14 @@ class Vacuum(Device):
             
             # Máquina de estados básica de transição do aspirador robô
             if payload == "start":
-                self.add_attribute("state", "cleaning")
+                self.start()
             elif payload == "pause":
-                self.add_attribute("state", "paused")
+                self.pause()
             elif payload == "stop":
-                self.add_attribute("state", "idle")
+                self.stop()
             elif payload == "return_to_base":
-                self.add_attribute("state", "returning")
+                self.return_to_base()
                 
-            self.print_state()
-
-            self.update()
         except Exception as e:
             logger.error(f"Erro ao processar comando no vacuum '{self.id}': {e}")
 
@@ -610,12 +611,46 @@ class Vacuum(Device):
         self.set_value("state", "idle")
         self.print_state()
 
-    def return_home(self):
+    def return_to_base(self):
         self.set_value("state", "returning")
         self.print_state()
 
-    def print_state(self):
-        logger.info(f"[Device]: {self.domain}.{self.id} -> {self.attributes['state']}")
+    def turn_on(self):
+        self.set_value("state", "ON")
+        self.print_state()
+
+    def turn_off(self):
+        self.set_value("state", "OFF")
+        self.print_state()
+
+    def toggle(self):
+        state = "ON" if self.attributes["state"] == "OFF" else "OFF"
+        self.set_value("state", state)
+        self.print_state()
+
+    def start_pause(self):
+        if self.is_states("state", "paused"):
+            self.start()
+            return
+
+        if self.is_states("state", "cleaning"):
+            self.pause()
+
+    def set_fan_speed(self):
+        pass
+
+    def send_command(self):
+        pass
+
+    def locate(self):
+        pass
+
+    def clean_area(self):
+        pass
+
+    def clean_spot(self):
+        pass
+
 
 class Siren(Device):
     def __init__(self, id: str, name: str, service: Any, options: Dict[str, Any]) -> None:
@@ -648,6 +683,11 @@ class Siren(Device):
 
     def turn_off(self):
         self.set_value("state", "OFF")
+        self.print_state()
+
+    def toggle(self):
+        state = "ON" if self.attributes["state"] == "OFF" else "OFF"
+        self.set_value("state", state)
         self.print_state()
 
 class Alarm(Device):
