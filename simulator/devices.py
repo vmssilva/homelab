@@ -810,8 +810,10 @@ class WaterHeater(Device):
         super().__init__(id, name, service, options)
         self.domain = "water_heater"
         # Atributos internos padrão esperados pelo HA
-        if "state" not in self.attributes: 
-            self.attributes["state"] = "eco"  # No water_heater, o estado principal é o modo
+        #if "state" not in self.attributes: 
+        #    self.attributes["state"] = "eco"  # No water_heater, o estado principal é o modo
+        if "operation_mode" not in self.attributes: 
+            self.attributes["operation_mode"] =  "eco"  # No water_heater, o estado principal é o modo
         if "temperature" not in self.attributes: 
             self.attributes["temperature"] = 45.0
         if "current_temperature" not in self.attributes: 
@@ -838,7 +840,7 @@ class WaterHeater(Device):
             "current_temperature_template": "{{ value_json.current_temperature }}",
             
             # Lista de modos que aparecerão no seletor do painel do HA
-            "modes": ["off", "eco", "electric", "gas", "heat_pump"]
+            "modes": ["off", "eco", "electric", "gas", "heat_pump", "high_demand", "performance"]
         }
         
         for key, val in defaults.items():
@@ -854,7 +856,8 @@ class WaterHeater(Device):
     def update(self) -> None:
         """✨ TRATAMENTO ESPECIAL: Envia o payload JSON perfeitamente limpo."""
         payload_data = {
-            "state": str(self.attributes.get("state", "eco")).lower(),
+            #"state": str(self.attributes.get("state", "eco")).lower(),
+            "state": str(self.attributes.get("operation_mode", "eco")).lower(),
             "temperature": float(self.attributes.get("temperature", 45.0)),
             "current_temperature": float(self.attributes.get("current_temperature", 39.0))
         }
@@ -870,7 +873,8 @@ class WaterHeater(Device):
             payload = msg.payload.decode("utf-8").strip().lower()
             logger.info(f"[HA IN]: '{self.domain}.{self.id}' (Modo) -> {payload}")
             
-            self.add_attribute("state", payload)
+            #self.add_attribute("state", payload)
+            self.add_attribute("operation_mode", payload)
             self.update() # Devolve o JSON confirmando para o botão fixar na tela
         except Exception as e:
             logger.error(f"Erro ao mudar modo do water_heater '{self.id}': {e}")
@@ -886,6 +890,25 @@ class WaterHeater(Device):
             self.update() # Devolve a confirmação de temperatura para fixar o slider
         except Exception as e:
             logger.error(f"Erro ao mudar temperatura do water_heater '{self.id}': {e}")
+
+    def set_temperature(self):
+        pass
+
+    def turn_away_mode_on(self):
+        pass
+
+    def turn_away_mode_off(self):
+        pass
+
+    def set_operation_mode(self):
+        pass
+
+    def turn_on(self):
+        pass
+
+    def turn_off(self):
+        pass
+
 
 #class MediaPlayer(Device):
 #    def __init__(self, id: str, name: str, service: Any, options: Dict[str, Any]) -> None:

@@ -1,5 +1,7 @@
 broker: "localhost"
 devices:
+  - type: water_heater
+    id: water_heater
   #- type: "light"
   #  id: "kitchen"
   #  configurations:
