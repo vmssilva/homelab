@@ -81,6 +81,9 @@ class Device:
 
     def set_value(self, key: str, value: Any) -> None:
         """Altera um atributo interno da aplicação e sincroniza com o Home Assistant."""
+        if self.attributes[key] == value:
+            return
+
         self.add_attribute(key, value)
         self.update()
 
@@ -673,14 +676,44 @@ class Alarm(Device):
             
             # Mapeamento padrão de comandos recebidos para estados do HA
             alarm_states = {
-                "disarm": "disarmed", "arm_home": "armed_home", 
-                "arm_away": "armed_away", "arm_night": "armed_night"
+                "disarm": self.alarm_disarm,
+                "arm_home": self.alarm_arm_home, 
+                "arm_away": self.alarm_arm_away,
+                "arm_night": self.alarm_arm_night,
+                "arm_vacation": self.alarm_arm_vacation,
+                "arm_custom_bypass": self.alarm_arm_custom_bypass
             }
+
             if payload_str in alarm_states:
-                self.add_attribute("state", alarm_states[payload_str])
-                self.update()
+                alarm_states[payload_str]()
+
         except Exception as e:
             logger.error(f"Erro no alarme '{self.id}': {e}")
+
+
+    def alarm_arm_away(self):
+        self.set_value("state", "armed_away")
+        self.print_state()
+
+    def alarm_arm_custom_bypass(self):
+        self.set_value("state", "armed_custom_bypass")
+        self.print_state()
+
+    def alarm_arm_home(self):
+        self.set_value("state", "armed_home")
+        self.print_state()
+    
+    def alarm_arm_night(self):
+        self.set_value("state", "armed_night")
+        self.print_state()
+
+    def alarm_arm_vacation(self):
+        self.set_value("state", "armed_vacation")
+        self.print_state()
+
+    def alarm_disarm(self):
+        self.set_value("state", "disarmed")
+        self.print_state()
 
 class DeviceTracker(Device):
     def __init__(self, id: str, name: str, service: Any, options: Dict[str, Any]) -> None:

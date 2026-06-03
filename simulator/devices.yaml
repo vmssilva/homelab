@@ -1,7 +1,7 @@
 broker: "localhost"
 devices:
-  - type: humidifier
-    id: humidifier
+  - type: alarm_control_panel
+    id: alarm
 
   #- type: "light"
   #  id: "kitchen"
