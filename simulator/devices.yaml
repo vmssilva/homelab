@@ -1,19 +1,427 @@
-broker: "localhost"
+# ==============================================================================
+# DISPOSITIVOS DE TESTE INTEGRADOS (SIMULADOR SMART HOME)
+# ==============================================================================
+
+# ==========================================
+# TESTE DE DISPOSITIVOS: AGRUPADOS VS SOLOS
+# ==========================================
 devices:
-  - type: vacuum
-    id: vacuum
+  # 1. Lâmpada Principal com Switch Agrupado (Pai)
+  - type: "light"
+    id: "hub_sala"
+    name: "Lâmpada da Sala"
+    model: "Smart Light Hub Pro"
+    manufacturer: "Fluid Home"
+    configurations:
+      schema: "json"
+      brightness: true
+    attributes:
+      state: "OFF"
+      brightness: 255
+    # 🌟 O PULO DO GATO: O switch nasce dentro do escopo do pai
+    #children:
+    #  - type: "switch"
+    #    id: "switch_tomada_sala"
+    #    name: "Tomada do Abajur"
+    #    payload_on: "ON"
+    #    payload_off: "OFF"
+    #    attributes:
+    #      state: "OFF"
+  # 2. Lâmpada Sozinha (Comportamento Tradicional)
+  - type: "light"
+    id: "lampada_cozinha"
+    name: "Lâmpada da Cozinha"
+    model: "Standard Light Bulb"
+    manufacturer: "Fluid Home"
+    configurations:
+      schema: "json"
+    attributes:
+      state: "OFF"
+      brightness: 180
 
-  #- type: "light"
-  #  id: "kitchen"
-  #  configurations:
-  #    schema: "json"
-  #    brightness: true
-  #  attributes:
-  #    state: "OFF"
-  #    brightness: 100
 
+#devices:
+#  - type: "switch"
+#    id: "master_switch"
+#    name: "Mestre da Casa"
+#    configurations:
+#      device_class: "outlet"
+#    attributes:
+#      state: "OFF"
+#    adapters:
+#      # Cenário: Quando o switch mestre apagar, desliga a lâmpada da sala também
+#      - trigger: "change"
+#        property: "state"
+#        to: "OFF"
+#        action_type: "device"
+#        target_id: "light.lampada_sala"
+#        target_action: "turn_off"
+#
+#  - type: "light"
+#    id: "lampada_sala"
+#    name: "Lâmpada da Sala"
+#    configurations:
+#      schema: "json"
+#      brightness: true
+#      color_temp: true
+#    attributes:
+#      state: "OFF"
+#      brightness: 255
+#      color_temp: 250
+#    adapters:
+#      # Cenário: Se o brilho chegar ao máximo (255), fecha a cortina para não esquentar
+#      - trigger: "change"
+#        property: "brightness"
+#        action_type: "device"
+#        target_id: "cover.cortina_blackout"
+#        target_action: "execute_action"
+#        data: "{% if value == 255 %}close_cover{% endif %}"
+#
+#  - type: "number"
+#    id: "ajuste_temperatura"
+#    name: "Termostato Alvo"
+#    configurations:
+#      min: 16
+#      max: 30
+#      step: 0.5
+#      unit_of_measurement: "°C"
+#    attributes:
+#      value: 22.0
+#    variables:
+#      fator_correcao: -2 # 🌟 Testa o parser de números negativos do Jinja2
+#    adapters:
+#      # Cenário: Quando mudar a temperatura, envia um payload calculado via MQTT
+#      - trigger: "change"
+#        property: "value"
+#        action_type: "mqtt"
+#        topic: "v1/clima/calculado"
+#        data: "{{ value + this.fator_correcao }}"
+#
+#  - type: "cover"
+#    id: "cortina_blackout"
+#    name: "Cortina Blackout"
+#    configurations:
+#      device_class: "curtain"
+#    variables:
+#      step: 10          # Define o tamanho do degrau na thread de animação (10%)
+#      delay: 0.2        # Velocidade da rampa física (0.2 segundos por degrau)
+#    attributes:
+#      position: 0
+#      state: "closed"
+#    adapters:
+#      # Cenário: Se a cortina abrir totalmente (100%), apaga a lâmpada da sala (luz natural)
+#      - trigger: "change"
+#        property: "position"
+#        action_type: "device"
+#        target_id: "light.lampada_sala"
+#        target_action: "execute_action"
+#        data: "{% if value == 100 %}turn_off{% endif %}"
+#
+#  - type: "climate"
+#    id: "ar_condicionado_quarto"
+#    name: "Ar Condicionado"
+#    attributes:
+#      mode: "off"
+#      temperature: 24.0
+#      current_temperature: 28.0
+#    adapters:
+#      # Cenário: Se alguém abaixar a temperatura para menos de 18°C, fecha a cortina para isolar o ambiente!
+#      - trigger: "change"
+#        property: "temperature"
+#        action_type: "device"
+#        target_id: "cover.cortina_blackout"
+#        target_action: "execute_action"
+#        data: "{% if value <= 18.0 %} close_cover {% endif %}"
+#
+#  - type: "fan"
+#    id: "ventilador_teto"
+#    name: "Ventilador"
+#    adapters:
+#      # Cenário A: Se o ventilador passar de 80% de velocidade, avisa/executa o Ar Condicionado para desligar
+#      - trigger: "change"
+#        property: "percentage"
+#        action_type: "device"
+#        target_id: "climate.ar_condicionado_quarto"
+#        target_action: "turn_off"
+#        data: "{% if value >= 80 %}turn_off{% endif %}"
+#
+#  - type: "switch"
+#    id: "interruptor_geral"
+#    name: "Master Switch"
+#    adapters:
+#      # Cenário B: Se desligar o interruptor mestre, desliga o ventilador sem passar argumentos extras
+#      - trigger: "change"
+#        property: "state"
+#        to: "OFF"
+#        action_type: "device"
+#        target_id: "fan.ventilador_teto"
+#        target_action: "turn_off"
+#
+#  - type: "binary_sensor"
+#    id: "sensor_presenca_corredor"
+#    name: "Sensor de Presença"
+#    adapters:
+#      # Cenário A: Detectou movimento (ON)? Liga o ventilador de teto na velocidade média!
+#      - trigger: "change"
+#        property: "state"
+#        to: "ON"
+#        action_type: "device"
+#        target_id: "fan.ventilador_teto"
+#        target_action: "set_percentage"
+#        data: 66
+#
+#  - type: "sensor"
+#    id: "sensor_luminosidade_sala"
+#    name: "Luxômetro da Sala"
+#    adapters:
+#      # Cenário B: Se a luminosidade cair abaixo de 150 lux, acende a lâmpada da sala
+#      - trigger: "change"
+#        property: "state"
+#        action_type: "device"
+#        target_id: "light.lampada_sala"
+#        target_action: "turn_on"
+#        data: "{% if value < 150 %}turn_on{% endif %}"
+#
+#  - type: "energy"
+#    id: "medidor_geral"
+#    name: "Medidor de Energia Geral"
+#    adapters:
+#    # Cenário: Se o consumo instantâneo (power) passar de 5000W, desliga o Ar Condicionado para evitar sobrecarga!
+#      - trigger: "change"
+#        property: "power"
+#        action_type: "device"
+#        target_id: "climate.ar_condicionado_quarto"
+#        target_action: "turn_off"
+#        data: "{% if value >= 5000.0 %}turn_off{% endif %}"
+#
+#  - type: "lock"
+#    id: "fechadura_entrada"
+#    name: "Porta de Entrada"
+#    adapters:
+#      # Cenário A: Se a porta for trancada (LOCKED), assume que você saiu. Desliga o Ar e o Ventilador!
+#      - trigger: "change"
+#        property: "state"
+#        to: "LOCKED"
+#        action_type: "device"
+#        target_id: "fan.ventilador_teto"
+#        target_action: "turn_off"
+#
+#      # Cenário B: Se a porta for destrancada (UNLOCKED), acende a lâmpada da sala automaticamente!
+#      - trigger: "change"
+#        property: "state"
+#        to: "UNLOCKED"
+#        action_type: "device"
+#        target_id: "light.lampada_sala"
+#        target_action: "turn_on"
+#
+#  - type: "button"
+#    id: "botao_modo_cinema"
+#    name: "Assistir Filme"
+#    adapters:
+#      # Quando clicado no HA, fecha a cortina blackout de primeira!
+#      - trigger: "change"
+#        property: "state"
+#        to: "PRESSED"
+#        action_type: "device"
+#        target_id: "cover.cortina_blackout"
+#        target_action: "close_cover"
+#
+#  - type: "button"
+#    id: "botao_desligar_tudo"
+#    name: "Macro Sair de Casa"
+#    adapters:
+#      # Apaga a lâmpada da sala
+#      - trigger: "change"
+#        property: "state"
+#        to: "PRESSED"
+#        action_type: "device"
+#        target_id: "light.lampada_sala"
+#        target_action: "turn_off"
+#
+#      # Desliga o ventilador de teto
+#      - trigger: "change"
+#        property: "state"
+#        to: "PRESSED"
+#        action_type: "device"
+#        target_id: "fan.ventilador_teto"
+#        target_action: "turn_off"
+#
+#      # Desliga o ar condicionado
+#      - trigger: "change"
+#        property: "state"
+#        to: "PRESSED"
+#        action_type: "device"
+#        target_id: "climate.ar_condicionado_quarto"
+#        target_action: "turn_off"
+#
+#  - type: "vacuum"
+#    id: "robo_aspirador"
+#    name: "Robô Aspirador"
+#    adapters:
+#      # Cenário A: Se o robô começar a limpar ('cleaning'), abre a cortina para ele ver o caminho!
+#      - trigger: "change"
+#        property: "state"
+#        to: "cleaning"
+#        action_type: "device"
+#        target_id: "cover.cortina_blackout"
+#        target_action: "open_cover"
+#
+#      # Cenário B: Se o sensor de presença acusar que você saiu de casa, manda o robô começar a limpar
+#  - type: "binary_sensor"
+#    id: "sensor_presenca_corredor"
+#    name: "Presença Geral"
+#    adapters:
+#      - trigger: "change"
+#        property: "state"
+#        to: "OFF" # Ninguém em casa!
+#        action_type: "device"
+#        target_id: "vacuum.robo_aspirador"
+#        target_action: "start"
+#
+#  - type: "binary_sensor"
+#    id: "sensor_presenca_corredor"
+#    name: "Presença Geral"
+#    adapters:
+#      # Cenário A: Se houver intrusão (Sensor de Presença vai para ON) e a casa deveria estar vazia, liga a sirene!
+#      - trigger: "change"
+#        property: "state"
+#        to: "ON"
+#        action_type: "device"
+#        target_id: "siren.sirene_alarme"
+#        target_action: "turn_on"
+#
+#  - type: "siren"
+#    id: "sirene_alarme"
+#    name: "Sirene do Painel"
+#    adapters:
+#      # Cenário B: Se a sirene começar a tocar (ON), abre a cortina imediatamente para expor o ambiente!
+#      - trigger: "change"
+#        property: "state"
+#        to: "ON"
+#        action_type: "device"
+#        target_id: "cover.cortina_blackout"
+#        target_action: "open_cover"
+#
+#  - type: "alarm"
+#    id: "alarme_residencial"
+#    name: "Alarme Central"
+#    adapters:
+#      # Cenário A: Se o alarme for armado no modo sair (armed_away), garante que o robô aspirador comece a trabalhar!
+#      - trigger: "change"
+#        property: "state"
+#        to: "armed_away"
+#        action_type: "device"
+#        target_id: "vacuum.robo_aspirador"
+#        target_action: "start"
+#
+#      # Cenário B: Se você desarmar o alarme (disarmed), desliga a sirene caso ela estivesse tocando
+#      - trigger: "change"
+#        property: "state"
+#        to: "disarmed"
+#        action_type: "device"
+#        target_id: "siren.sirene_alarme"
+#        target_action: "turn_off"
+#
+#  - type: "binary_sensor"
+#    id: "sensor_presenca_corredor"
+#    name: "Presença Geral"
+#    adapters:
+#      # Cenário C: Se houver movimento (ON) no corredor e o alarme NÃO estiver desarmado, dispara o alarme!
+#      - trigger: "change"
+#        property: "state"
+#        to: "ON"
+#        action_type: "device"
+#        target_id: "alarm_control_panel.alarme_residencial"
+#        target_action: "trigger"
+#
+#  - type: "device_tracker"
+#    id: "celular_usuario"
+#    name: "GPS Celular"
+#    adapters:
+#      # Cenário A: Quando o celular entrar na zona de casa ('home'), desmarca e desarma o alarme automaticamente!
+#      - trigger: "change"
+#        property: "state"
+#        to: "home"
+#        action_type: "device"
+#        target_id: "alarm_control_panel.alarme_residencial"
+#        target_action: "alarm_disarm"
+#
+#      # Cenário B: Quando você sair de casa ('not_home'), garante o desligamento do ar condicionado
+#      - trigger: "change"
+#        property: "state"
+#        to: "not_home"
+#        action_type: "device"
+#        target_id: "climate.ar_condicionado_quarto"
+#        target_action: "turn_off"
+#
+#
+#  - type: "humidifier"
+#    id: "umidificador_quarto"
+#    name: "Umidificador do Quarto"
+#    adapters:
+#      # Cenário A: Se você subir o slider de umidade alvo para acima de 65%, liga o ventilador para ajudar a espalhar o ar!
+#      - trigger: "change"
+#        property: "target_humidity"
+#        action_type: "device"
+#        target_id: "fan.ventilador_teto"
+#        target_action: "turn_on"
+#        data: "{% if value > 65 %}turn_on{% endif %}"
+#
+#      # Cenário B: Se a leitura de um sensor físico de umidade apontar que o ar ficou seco demais (abaixo de 35%), liga o umidificador
+#  - type: "sensor"
+#    id: "sensor_clima_interno"
+#    name: "Termômetro Higrômetro"
+#    adapters:
+#      - trigger: "change"
+#        property: "state"
+#        action_type: "device"
+#        target_id: "humidifier.umidificador_quarto"
+#        target_action: "execute_action"
+#        data: "{% if value < 35 %}turn_on{% endif %}"
+#
+#
+#  - type: "water_heater"
+#    id: "boiler_central"
+#    name: "Aquecedor Central"
+#    adapters:
+#      # Cenário A: Se a temperatura da água passar de 60°C, dispara uma ação de segurança
+#      - trigger: "change"
+#        property: "temperature"
+#        action_type: "device"
+#        target_id: "siren.sirene_alarme"
+#        target_action: "execute_action"
+#        data: "{% if value >= 30.0 %}turn_on{% endif %}"
+#
+#  - type: "device_tracker"
+#    id: "celular_usuario"
+#    name: "GPS Celular"
+#    adapters:
+#      # Cenário B: Se você sair de casa (not_home), o aquecedor muda automaticamente para o modo "off" ou "eco"
+#      - trigger: "change"
+#        property: "state"
+#        to: "not_home"
+#        action_type: "device"
+#        target_id: "water_heater.boiler_central"
+#        target_action: "turn_off"
+#
+#
+#  - type: "media_player"
+#    id: "som_ambiente"
+#    name: "Som do Escritório"
+#    adapters:
+#      # Cenário A: Se o player começar a tocar ("playing"), aciona o execute_action para apagar a luz
+#      - trigger: "change"
+#        property: "state"
+#        action_type: "device"
+#        target_id: "light.lampada_sala"
+#        target_action: "execute_action"
+#        data: "{% if value == 'playing' %}turn_off{% endif %}"
+#
+#      # Cenário B: Se você baixar o volume do som para menos de 10% (0.1), desliga o amplificador
+#      - trigger: "change"
+#        property: "volume_level"
+#        action_type: "device"
+#        target_id: "switch.amplificador_central"
+#        target_action: "execute_action"
+#        data: "{% if value < 0.10 %}turn_off{% endif %}"
 
-  #- type: "light"
-  #  id: "simple_kitchen"
-  #  attributes:
-  #    state: "ON"

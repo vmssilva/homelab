@@ -42,3 +42,4 @@ class MQTTService:
         self.client.message_callback_add(topic, callback)
         self.client.subscribe(topic)
 
+

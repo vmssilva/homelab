@@ -1,7 +1,8 @@
 import time
-from .runtime import Runtime
 
 if __name__ == "__main__":
+    from .runtime import Runtime
+
     runtime = Runtime()
     runtime.load_config("simulator/devices.yaml")
     runtime.start()
@@ -14,3 +15,4 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         # Captura o Ctrl+C e limpa tudo automaticamente
         runtime.stop()
+

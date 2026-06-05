@@ -1,23 +1,17 @@
-
-from logging import log
 import yaml
 import paho.mqtt.client as mqtt
 from typing import Optional, Any
-
 from .mqtt import MQTTService
 from .factory import DeviceFactory
 
 from .logger import logger
-# Seus imports reais do projeto (ajuste os caminhos se necessário)
-
-# Garante que a rota global do Home Assistant está definida no escopo
 BASE_ROUTE = "homeassistant"
 
 class Runtime:
     def __init__(self):
         self.client = mqtt.Client()
         self.service = MQTTService(self.client)
-        self.devices = []
+        self.devices = {}
         self.broker_host = "localhost"
 
     def load_config(self, filepath: str) -> None:
@@ -26,20 +20,31 @@ class Runtime:
             config_data = yaml.safe_load(file)
         
         self.broker_host = config_data.get("broker", "localhost")
-        
+
         for dev_entry in config_data.get("devices", []):
             try:
+                device_id = dev_entry.get("id", None)
+
+                if device_id == None:
+                    device_id = dev_entry.get("entity_id", None)
+
                 device = DeviceFactory.create(
                     device_type=dev_entry.get("type"),
-                    id=dev_entry.get("id"),
+                    id=device_id,
                     name=dev_entry.get("name"),
                     service=self.service,
                     raw_data=dev_entry
                 )
-                self.devices.append(device)
-                logger.info(f"Dispositivo carregado: {device.name} ({device.domain})")
+                self.devices[f"{device.domain}.{device.id}"] = device
+                logger.debug(f"Dispositivo carregado: {device.name} ({device.domain})")
             except Exception as e:
                 logger.error(f"Erro ao carregar dispositivo {dev_entry.get('id')}: {e}")
+
+    # 2. Passo: Resolver os Adapters (Injeção de Referência Direta)
+        logger.debug("Vinculando adaptadores entre dispositivos...")
+
+        for _, device in self.devices.items():
+            device.device_registries = self.devices
 
     def start(self, port: int = 1883) -> None:
         """Conecta ao broker, inicia o loop de rede e ativa os dispositivos."""
@@ -49,7 +54,7 @@ class Runtime:
         
         logger.info("Loop de rede iniciado. Executando setups...")
         # Inicializa o setup de todos os dispositivos carregados (Discovery + State)
-        for device in self.devices:
+        for _, device in self.devices.items():
             device.setup()
 
     def stop(self) -> None:
@@ -57,7 +62,7 @@ class Runtime:
         logger.info("\nEncerrando Runtime de forma segura...")
         
         # 1. Avisa o HA que todos os dispositivos sumiram da rede
-        for device in self.devices:
+        for _, device in self.devices.items():
             try:
                 self.service.publish(device.availability_topic(), "offline", retain=True)
             except Exception:
@@ -71,3 +76,4 @@ class Runtime:
     def get_device(self, device_id: str) -> Optional[Any]:
         """Busca um dispositivo gerenciado na memória pelo ID."""
         return next((d for d in self.devices if d.id == device_id), None)
+

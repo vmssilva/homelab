@@ -1,14 +1,27 @@
 from typing import Dict, Optional, Type, Any
 
 from .devices import *
+from .logger import logger
 
 class DeviceFactory:
     _registry: Dict[str, Type[Device]] = {
-        "light": Light, "switch": Switch, "climate": Climate, "fan": Fan,
-        "sensor": Sensor, "binary_sensor": BinarySensor, "energy": Energy,
-        "cover": Cover, "lock": Lock, "button": Button, "vacuum": Vacuum,
-        "siren": Siren, "alarm_control_panel": Alarm, "device_tracker": DeviceTracker,
-        "humidifier": Humidifier, "water_heater": WaterHeater
+        "light": Light,
+        "switch": Switch,
+        "cover": Cover,
+        "number": Number,
+        "fan": Fan,
+        "sensor": Sensor,
+        "binary_sensor": BinarySensor,
+        "energy": Energy,
+        "lock": Lock,
+        "button": Button,
+        "vacuum": Vacuum,
+        "siren": Siren,
+        "alarm": Alarm,
+        "device_tracker": DeviceTracker,
+        "humidifier": Humidifier,
+        "water_heater": WaterHeater,
+        "climate": Climate,
     }
 
     @classmethod
@@ -36,11 +49,14 @@ class DeviceFactory:
         options: Dict[str, Any] = {
             "configurations": raw_data.get("configurations", {}),
             "attributes": raw_data.get("attributes", {}),
-            "triggers": raw_data.get("triggers", [])
+            "adapters": raw_data.get("adapters", []),
+            "children": raw_data.get("children", []),
+            "sensors": raw_data.get("sensors", []),
+            "variables": raw_data.get("variables", {})
         }
 
         # 3. Move chaves soltas na raiz do YAML para dentro de 'attributes'
-        reserved_keys = ["type", "id", "name", "domain", "device_type", "configurations", "attributes", "triggers"]
+        reserved_keys = ["type", "id", "name", "domain", "device_type", "configurations", "attributes", "adapters"]
         for key, value in raw_data.items():
             if key not in reserved_keys:
                 options["attributes"][key] = value
@@ -58,4 +74,5 @@ class DeviceFactory:
             device.post_init()  # type: ignore
 
         return device
+
 
