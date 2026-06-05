@@ -1,3 +1,4 @@
+from os import device_encoding
 import threading
 import subprocess
 import json
@@ -46,6 +47,9 @@ class Device:
             self.variables[key] = value
             self.update()
 
+    def device_info(self) -> Dict[str, Any] | None:
+        return self.configurations.get("device", { "identifiers": [] })
+
     def get_property(self, key: str) -> Any:
         return self.attributes[key] if key in self.attributes else self.variables.get(key)
 
@@ -64,13 +68,23 @@ class Device:
     # --- Lifecycle & Telemetry Engine ---
     def setup(self) -> None:
         """Publishes discovery payload, availability and subscribes to commands."""
+
+        if not self.configurations.get("device", False):
+            self.configurations["device"] = {
+                "name": self.name,
+                "model": "Unknown",
+                "manufacturer": "Unknown",
+                "identifiers": [f"{self.domain}.{self.id}"]
+            }
+
         discovery_payload = {
             "name": self.name,
             "unique_id": f"{self.domain}.{self.id}",
             "state_topic": self.state_topic(),
             "availability_topic": self.availability_topic(),
             "payload_available": "online",
-            "payload_not_available": "offline"
+            "payload_not_available": "offline",
+            "device": json.dumps(self.device_info())
         }
         
         if self.domain not in ["sensor", "binary_sensor"]:
@@ -244,6 +258,10 @@ class Light(Device):
 
         if "state" not in self.attributes:
             self.attributes["state"] = "OFF"
+
+        if "brightness" in self.attributes:
+            self.configurations["brightness"] = True
+            self.configurations["schema"] = "json"
 
     def turn_on(self) -> None:
         """Turns the light ON preserving or resetting base attributes."""
@@ -1009,6 +1027,20 @@ class Energy(Device):
     def setup(self) -> None:
         """Publishes dedicated distinct MQTT Discovery topics for both metrics."""
         
+        # Metadados de Hardware do Dispositivo Pai (Wrapper raiz)
+        info = {
+            "name": self.name,
+            "model": "Energy Meter Wrapper",
+            "manufacturer": "Python Engine",
+            "identifiers": [f"{self.domain}.{self.id}"]
+        }
+
+        # Vínculo puro por ID para as outras entidades pegarem carona no mesmo dispositivo
+        identifiers = { "identifiers": info["identifiers"] }
+
+        if not self.configurations.get("device", False):
+            self.configurations["device"] = info
+
         # 1. Configuração do Sensor de Energia Acumulada (kWh)
         energy_config = {
             "name": f"{self.name} Energy",
@@ -1017,7 +1049,8 @@ class Energy(Device):
             "value_template": "{{ value_json.state }}",
             "device_class": "energy",
             "state_class": "total_increasing",
-            "unit_of_measurement": "kWh"
+            "unit_of_measurement": "kWh",
+            "device": info
         }
         
         # 2. Configuração do Sensor de Potência Instantânea (W)
@@ -1028,12 +1061,10 @@ class Energy(Device):
             "value_template": "{{ value_json.power }}",
             "device_class": "power",
             "state_class": "measurement",
-            "unit_of_measurement": "W"
+            "unit_of_measurement": "W",
+            "device": identifiers
         }
 
-        # 🌟 O PULO DO GATO: Ignoramos o super().setup() padrão para evitar conflito de IDs
-        # e publicamos os dois tópicos de configuração de forma explícita e isolada:
-        
         # Publica o Discovery do sensor de kWh
         energy_discovery_topic = f"homeassistant/sensor/{self.id}_energy/config"
         self.service.publish(energy_discovery_topic, json.dumps(energy_config), retain=True)
@@ -1044,7 +1075,7 @@ class Energy(Device):
 
         # Se inscreve no tópico de simulação para escutar os comandos do terminal
         self.service.subscribe(self.simulate_topic(), self.on_simulate_message)
-        logger.info(f"[ENERGY SETUP] Multi-sensor discovery deployed for '{self.id}'")
+        #logger.info(f"[ENERGY SETUP] Multi-sensor discovery deployed for '{self.id}'")
 
     def update(self, payload: Dict[str, Any] | None = None) -> None:
         """Serializes and broadcasts consolidated power/energy JSON packages to HA."""
@@ -2016,192 +2047,6 @@ class WaterHeater(Device):
         target = self.attributes.get("temperature", 45.0)
         logger.info(f"[STATE] {self.domain}.{self.id} -> Mode: {mode.upper()} | Target: {target}°C")
 
-
-#########################
-# MEDIA PLAYER
-########################
-#class MediaPlayer(Device):
-#    def __init__(self, id: str, name: str, service: Any, options: Dict[str, Any]) -> None:
-#        super().__init__(id, name, service, options)
-#        self.domain = "media_player"
-#        
-#        # Baselines padrão do Home Assistant MQTT Media Player
-#        if "state" not in self.attributes: 
-#            self.attributes["state"] = "off"  # off, idle, playing, paused
-#        if "volume_level" not in self.attributes: 
-#            self.attributes["volume_level"] = 0.5  # Float de 0.0 a 1.0
-#
-#    def volume_command_topic(self) -> str:
-#        return f"homeassistant/{self.domain}/{self.id}/volume/set"
-#
-#    def setup(self) -> None:
-#        # Configurações oficiais MQTT Media Player do Home Assistant
-#        defaults = {
-#            "state_topic": self.state_topic(),
-#            "command_topic": self.command_topic(),
-#            "volume_command_topic": self.volume_command_topic(),
-#            
-#            # Mapeamento para ler o payload JSON unificado no state_topic
-#            "state_value_template": "{{ value_json.state }}",
-#            "volume_state_template": "{{ value_json.volume_level }}",
-#            
-#            # Recursos que este player suporta (exibe os botões corretos na UI do HA)
-#            "supported_features": ["play", "pause", "stop", "turn_on", "turn_off", "volume_set"]
-#        }
-#        
-#        for key, val in defaults.items():
-#            if key not in self.configurations:
-#                self.configurations[key] = val
-#
-#        super().setup()
-#        
-#        # Inscrições nos canais de controle de comandos e volume
-#        self.service.subscribe(self.command_topic(), self.on_message)
-#        self.service.subscribe(self.volume_command_topic(), self.on_volume_message)
-#        
-#        # Sincroniza o estado inicial no boot
-#        self.update()
-#
-#    def update(self, payload: Dict[str, Any] | None = None) -> None:
-#        """Serializa e publica o estado consolidado no broker MQTT."""
-#        state_str = str(self.attributes.get("state", "off")).lower()
-#        volume_float = round(float(self.attributes.get("volume_level", 0.5)), 2)
-#
-#        payload_data = {
-#            "state": state_str,
-#            "volume_level": volume_float
-#        }
-#
-#        self.service.publish(self.state_topic(), json.dumps(payload_data), retain=True)
-#
-#        # Dispara os gatilhos (adapters) no seu devices.yaml enviando o tipo primitivo puro
-#        for adapter in self.adapters_config:
-#            if adapter.get("trigger") == "change":
-#                self._change_adapter(adapter)
-#
-#    def _run_mpc(self, command: list) -> None:
-#        """Executa comandos seguros no terminal OS invocando o mpc cliente."""
-#        try:
-#            # Junta o binário mpc com os argumentos (ex: ["mpc", "play"])
-#            full_command = ["mpc"] + command
-#            subprocess.run(full_command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
-#            logger.info(f"[MPC EXEC] Comando enviado ao SO: {' '.join(full_command)}")
-#        except Exception as e:
-#            logger.error(f"[MPC ERROR] Falha ao executar mpc no OS: {e}")
-#
-#    # --- Tratamento de Mensagens Recebidas do HA ---
-#    def on_message(self, client: Any, userdata: Any, msg: Any) -> None:
-#        """Processa comandos textuais de controle vindos do painel do HA."""
-#        try:
-#            payload = msg.payload.decode("utf-8").strip().upper()
-#            logger.info(f"[HA IN] {self.domain}.{self.id} (Comando) -> '{payload}'")
-#            
-#            if payload == "TURN_ON":
-#                self.turn_on()
-#            elif payload == "TURN_OFF":
-#                self.turn_off()
-#            elif payload == "PLAY":
-#                self.media_play()
-#            elif payload == "PAUSE":
-#                self.media_pause()
-#            elif payload == "STOP":
-#                self.media_stop()
-#                
-#        except Exception as e:
-#            logger.error(f"[MEDIA ERROR] Erro no processamento de comando em '{self.id}': {e}")
-#
-#    def on_volume_message(self, client: Any, userdata: Any, msg: Any) -> None:
-#        """Processa ajustes do Slider de volume vindos do painel do HA (0.0 a 1.0)."""
-#        try:
-#            payload = msg.payload.decode("utf-8").strip()
-#            volume_val = float(payload)
-#            logger.info(f"[HA IN] {self.domain}.{self.id} (Volume Target) -> {volume_val}")
-#            
-#            self.set_volume_level(volume_val)
-#        except Exception as e:
-#            logger.error(f"[MEDIA ERROR] Erro no ajuste de volume em '{self.id}': {e}")
-#
-#    # --- Métodos de Comando Puros (Sem argumentos para o devices.yaml) ---
-#    def turn_on(self) -> None:
-#        """Ativa o player saindo do estado off."""
-#        if self.attributes.get("state") != "off":
-#            return
-#        
-#        self._previous_attributes = self.attributes.copy()
-#        self.attributes["state"] = "idle"
-#        # Inicializa o MPD se necessário, ou limpa o status
-#        self._run_mpc(["clear"]) 
-#        self.update()
-#        self.print_state()
-#
-#    def turn_off(self) -> None:
-#        """Desliga o player e para qualquer música no OS."""
-#        if self.attributes.get("state") == "off":
-#            return
-#            
-#        self._previous_attributes = self.attributes.copy()
-#        self.attributes["state"] = "off"
-#        self._run_mpc(["stop"])
-#        self.update()
-#        self.print_state()
-#
-#    def media_play(self) -> None:
-#        """Inicia ou retoma a reprodução de mídia no Linux."""
-#        if self.attributes.get("state") == "playing":
-#            return
-#
-#        self._previous_attributes = self.attributes.copy()
-#        self.attributes["state"] = "playing"
-#        self._run_mpc(["play"])
-#        self.update()
-#        self.print_state()
-#
-#    def media_pause(self) -> None:
-#        """Pausa a reprodução atual no Linux."""
-#        if self.attributes.get("state") == "paused":
-#            return
-#
-#        self._previous_attributes = self.attributes.copy()
-#        self.attributes["state"] = "paused"
-#        self._run_mpc(["pause"])
-#        self.update()
-#        self.print_state()
-#
-#    def media_stop(self) -> None:
-#        """Para totalmente a reprodução."""
-#        if self.attributes.get("state") == "idle":
-#            return
-#
-#        self._previous_attributes = self.attributes.copy()
-#        self.attributes["state"] = "idle"
-#        self._run_mpc(["stop"])
-#        self.update()
-#        self.print_state()
-#
-    # --- Métodos Parametrizados ---
-    def set_volume_level(self, volume: Any) -> None:
-        """Aplica o volume de forma atômica no dicionário e no OS."""
-        try:
-            val = max(0.0, min(1.0, float(volume)))
-            if self.attributes.get("volume_level") == val:
-                return
-
-            self._previous_attributes = self.attributes.copy()
-            self.attributes["volume_level"] = val
-
-            # O mpc recebe o volume em escala percentual inteira (0 a 100)
-            mpc_vol = int(val * 100)
-            self._run_mpc(["volume", str(mpc_vol)])
-
-            self.update()
-            self.print_state()
-        except (ValueError, TypeError) as e:
-            logger.error(f"[MEDIA ERROR] Volume inválido recebido '{volume}': {e}")
-
-    def print_state(self, include_attributes: bool = True) -> None:
-        state = self.attributes.get("state", "off").upper()
-        vol = int(float(self.attributes.get("volume_level", 0.5)) * 100)
-        logger.info(f"[STATE] {self.domain}.{self.id} -> {state} | Volume: {vol}%")
 
 #class Select(Device):
 #    def __init__(self, id: str, name: str, service: Any, options: Dict[str, Any]) -> None:

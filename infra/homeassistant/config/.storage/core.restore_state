@@ -4,47 +4,97 @@
   "key": "core.restore_state",
   "data": [
     {
-      "state": {"entity_id":"conversation.home_assistant","state":"unknown","attributes":{"friendly_name":"Home Assistant","supported_features":1},"last_changed":"2026-06-05T12:28:26.209251+00:00","last_reported":"2026-06-05T12:28:26.209251+00:00","last_updated":"2026-06-05T12:28:26.209251+00:00","context":{"id":"01KTBW34Q1C2DZZRNEEQE2FG37","parent_id":null,"user_id":null}},
+      "state": {"entity_id":"conversation.home_assistant","state":"unknown","attributes":{"friendly_name":"Home Assistant","supported_features":1},"last_changed":"2026-06-05T20:48:45.411461+00:00","last_reported":"2026-06-05T20:48:45.411461+00:00","last_updated":"2026-06-05T20:48:45.411461+00:00","context":{"id":"01KTCRQ8B3WQDEET074HSFWW6G","parent_id":null,"user_id":null}},
       "extra_data": null,
-      "last_seen": "2026-06-05T12:28:29.117489+00:00"
+      "last_seen": "2026-06-05T20:48:50.858343+00:00"
     },
     {
-      "state": {"entity_id":"event.backup_automatic_backup","state":"unknown","attributes":{"event_types":["completed","failed","in_progress"],"event_type":null,"friendly_name":"Backup Automatic backup"},"last_changed":"2026-06-05T12:28:26.331060+00:00","last_reported":"2026-06-05T12:28:26.331060+00:00","last_updated":"2026-06-05T12:28:26.331060+00:00","context":{"id":"01KTBW34TV2Y2G41SDZ9ZJHNBR","parent_id":null,"user_id":null}},
+      "state": {"entity_id":"event.backup_automatic_backup","state":"unknown","attributes":{"event_types":["completed","failed","in_progress"],"event_type":null,"friendly_name":"Backup Automatic backup"},"last_changed":"2026-06-05T20:48:45.472144+00:00","last_reported":"2026-06-05T20:48:45.472144+00:00","last_updated":"2026-06-05T20:48:45.472144+00:00","context":{"id":"01KTCRQ8D0KYE7BRR8FWWNE9EB","parent_id":null,"user_id":null}},
       "extra_data": {
         "last_event_type": null,
         "last_event_attributes": null
       },
-      "last_seen": "2026-06-05T12:28:29.117489+00:00"
+      "last_seen": "2026-06-05T20:48:50.858343+00:00"
     },
     {
-      "state": {"entity_id":"person.dida","state":"unknown","attributes":{"editable":true,"id":"dida","device_trackers":[],"in_zones":[],"source":"person.dida","user_id":"c223aa623ed348c4a3589fa33b049d66","friendly_name":"dida"},"last_changed":"2026-06-05T12:28:26.699326+00:00","last_reported":"2026-06-05T12:28:26.699326+00:00","last_updated":"2026-06-05T12:28:26.699326+00:00","context":{"id":"01KTBW356BBHRNRHHP62H38FEJ","parent_id":null,"user_id":null}},
+      "state": {"entity_id":"person.dida","state":"unknown","attributes":{"editable":true,"id":"dida","device_trackers":[],"in_zones":[],"source":"person.dida","user_id":"c223aa623ed348c4a3589fa33b049d66","friendly_name":"dida"},"last_changed":"2026-06-05T20:48:46.527300+00:00","last_reported":"2026-06-05T20:48:46.527300+00:00","last_updated":"2026-06-05T20:48:46.527300+00:00","context":{"id":"01KTCRQ9DZ71YRV26HV0YT7NNG","parent_id":null,"user_id":null}},
       "extra_data": null,
-      "last_seen": "2026-06-05T12:28:29.117489+00:00"
+      "last_seen": "2026-06-05T20:48:50.858343+00:00"
     },
     {
-      "state": {"entity_id":"person.dida_2","state":"unknown","attributes":{"editable":true,"id":"dida_2","device_trackers":[],"in_zones":[],"source":"person.dida_2","user_id":"908f09f2035142178ec0ed5c8d79ad2d","friendly_name":"dida"},"last_changed":"2026-06-05T12:28:26.699578+00:00","last_reported":"2026-06-05T12:28:26.699578+00:00","last_updated":"2026-06-05T12:28:26.699578+00:00","context":{"id":"01KTBW356B8BHZPD24KCD1D8MH","parent_id":null,"user_id":null}},
+      "state": {"entity_id":"person.dida_2","state":"unknown","attributes":{"editable":true,"id":"dida_2","device_trackers":[],"in_zones":[],"source":"person.dida_2","user_id":"908f09f2035142178ec0ed5c8d79ad2d","friendly_name":"dida"},"last_changed":"2026-06-05T20:48:46.527599+00:00","last_reported":"2026-06-05T20:48:46.527599+00:00","last_updated":"2026-06-05T20:48:46.527599+00:00","context":{"id":"01KTCRQ9DZCZXXN6354ZZ8546E","parent_id":null,"user_id":null}},
       "extra_data": null,
-      "last_seen": "2026-06-05T12:28:29.117489+00:00"
+      "last_seen": "2026-06-05T20:48:50.858343+00:00"
     },
     {
-      "state": {"entity_id":"tts.google_translate_en_com","state":"unknown","attributes":{"friendly_name":"Google Translate en com"},"last_changed":"2026-06-05T12:28:28.598858+00:00","last_reported":"2026-06-05T12:28:28.598858+00:00","last_updated":"2026-06-05T12:28:28.598858+00:00","context":{"id":"01KTBW371PGY6GY2ZAQNEHTM6M","parent_id":null,"user_id":null}},
+      "state": {"entity_id":"tts.google_translate_en_com","state":"unknown","attributes":{"friendly_name":"Google Translate en com"},"last_changed":"2026-06-05T20:48:49.523960+00:00","last_reported":"2026-06-05T20:48:49.523960+00:00","last_updated":"2026-06-05T20:48:49.523960+00:00","context":{"id":"01KTCRQCBKQ4WJ89SZKBE2C0J3","parent_id":null,"user_id":null}},
       "extra_data": null,
-      "last_seen": "2026-06-05T12:28:29.117489+00:00"
+      "last_seen": "2026-06-05T20:48:50.858343+00:00"
     },
     {
-      "state": {"entity_id":"tts.google_translate_en_com_2","state":"unknown","attributes":{"friendly_name":"Google Translate en com"},"last_changed":"2026-06-05T12:28:28.600497+00:00","last_reported":"2026-06-05T12:28:28.600497+00:00","last_updated":"2026-06-05T12:28:28.600497+00:00","context":{"id":"01KTBW371R6M28R7EYAYK0HD06","parent_id":null,"user_id":null}},
+      "state": {"entity_id":"tts.google_translate_en_com_2","state":"unknown","attributes":{"friendly_name":"Google Translate en com"},"last_changed":"2026-06-05T20:48:49.524723+00:00","last_reported":"2026-06-05T20:48:49.524723+00:00","last_updated":"2026-06-05T20:48:49.524723+00:00","context":{"id":"01KTCRQCBMZM8N5Z06JKT5400E","parent_id":null,"user_id":null}},
       "extra_data": null,
-      "last_seen": "2026-06-05T12:28:29.117489+00:00"
+      "last_seen": "2026-06-05T20:48:50.858343+00:00"
     },
     {
-      "state": {"entity_id":"light.lampada_da_sala_lampada_da_sala","state":"unavailable","attributes":{"supported_color_modes":["onoff"],"friendly_name":"Lâmpada da Sala Lâmpada da Sala","supported_features":40},"last_changed":"2026-06-05T12:21:07.441575+00:00","last_reported":"2026-06-05T12:28:14.264310+00:00","last_updated":"2026-06-05T12:21:07.441575+00:00","context":{"id":"01KTBVNR7HB74MNGANA0DN1FMR","parent_id":null,"user_id":null}},
+      "state": {"entity_id":"light.lampada_da_sala_lampada_da_sala","state":"unavailable","attributes":{"supported_color_modes":["brightness"],"friendly_name":"Lâmpada da Sala","supported_features":40},"last_changed":"2026-06-05T20:40:10.049173+00:00","last_reported":"2026-06-05T20:43:16.561699+00:00","last_updated":"2026-06-05T20:40:10.049173+00:00","context":{"id":"01KTCR7H218ZTB43RQH66K592M","parent_id":null,"user_id":null}},
       "extra_data": null,
-      "last_seen": "2026-06-05T12:28:14.280368+00:00"
+      "last_seen": "2026-06-05T20:43:16.819139+00:00"
     },
     {
-      "state": {"entity_id":"light.lampada_da_cozinha_lampada_da_cozinha","state":"unavailable","attributes":{"supported_color_modes":["onoff"],"friendly_name":"Lâmpada da Cozinha Lâmpada da Cozinha","supported_features":40},"last_changed":"2026-06-05T12:21:07.444126+00:00","last_reported":"2026-06-05T12:28:14.264394+00:00","last_updated":"2026-06-05T12:21:07.444126+00:00","context":{"id":"01KTBVNR7MNKM0JP77W0N1X70D","parent_id":null,"user_id":null}},
+      "state": {"entity_id":"light.lampada_da_cozinha_lampada_da_cozinha","state":"unavailable","attributes":{"supported_color_modes":["brightness"],"friendly_name":"Lampada Cozinha","supported_features":40},"last_changed":"2026-06-05T20:40:10.051420+00:00","last_reported":"2026-06-05T20:43:16.561822+00:00","last_updated":"2026-06-05T20:40:10.051420+00:00","context":{"id":"01KTCR7H23ATG1A178CS6HF6W0","parent_id":null,"user_id":null}},
       "extra_data": null,
-      "last_seen": "2026-06-05T12:28:14.280368+00:00"
+      "last_seen": "2026-06-05T20:43:16.819139+00:00"
+    },
+    {
+      "state": {"entity_id":"sensor.medidor_de_energia_geral_energy_2","state":"unavailable","attributes":{"state_class":"total_increasing","unit_of_measurement":"kWh","device_class":"energy","friendly_name":"Medidor de Energia Geral Medidor de Energia Geral Energy"},"last_changed":"2026-06-05T20:43:16.561952+00:00","last_reported":"2026-06-05T20:43:16.561952+00:00","last_updated":"2026-06-05T20:43:16.561952+00:00","context":{"id":"01KTCRD76HDKKPAE5884XV1B7T","parent_id":null,"user_id":null}},
+      "extra_data": {
+        "native_value": null,
+        "native_unit_of_measurement": "kWh"
+      },
+      "last_seen": "2026-06-05T20:43:16.819139+00:00"
+    },
+    {
+      "state": {"entity_id":"sensor.medidor_de_energia_geral_power","state":"unavailable","attributes":{"state_class":"measurement","unit_of_measurement":"W","device_class":"power","friendly_name":"Medidor de Energia Geral Medidor de Energia Geral Power"},"last_changed":"2026-06-05T20:43:16.562130+00:00","last_reported":"2026-06-05T20:43:16.562130+00:00","last_updated":"2026-06-05T20:43:16.562130+00:00","context":{"id":"01KTCRD76JH49YTTTAWSB9NVQF","parent_id":null,"user_id":null}},
+      "extra_data": {
+        "native_value": null,
+        "native_unit_of_measurement": "W"
+      },
+      "last_seen": "2026-06-05T20:43:16.819139+00:00"
+    },
+    {
+      "state": {"entity_id":"light.luz_teste","state":"unavailable","attributes":{"supported_color_modes":["onoff"],"friendly_name":"Luz Teste","supported_features":0},"last_changed":"2026-06-05T20:43:16.562279+00:00","last_reported":"2026-06-05T20:43:16.562279+00:00","last_updated":"2026-06-05T20:43:16.562279+00:00","context":{"id":"01KTCRD76J745XSN35J158D67D","parent_id":null,"user_id":null}},
+      "extra_data": null,
+      "last_seen": "2026-06-05T20:43:16.819139+00:00"
+    },
+    {
+      "state": {"entity_id":"sensor.medidor_de_energia_geral_energy","state":"unavailable","attributes":{"state_class":"total_increasing","unit_of_measurement":"kWh","device_class":"energy","friendly_name":"Medidor de Energia Geral Energy"},"last_changed":"2026-06-05T19:08:38.099189+00:00","last_reported":"2026-06-05T19:08:38.099189+00:00","last_updated":"2026-06-05T19:08:38.099189+00:00","context":{"id":"01KTCJZXTKSMZBZ4YNT983G7SP","parent_id":null,"user_id":null}},
+      "extra_data": {
+        "native_value": null,
+        "native_unit_of_measurement": "kWh"
+      },
+      "last_seen": "2026-06-05T19:08:38.209297+00:00"
+    },
+    {
+      "state": {"entity_id":"sensor.sensor_energia_sensor_energia","state":"unavailable","attributes":{"friendly_name":"Sensor Energia Sensor Energia"},"last_changed":"2026-06-05T18:13:57.143726+00:00","last_reported":"2026-06-05T18:13:57.143726+00:00","last_updated":"2026-06-05T18:13:57.143726+00:00","context":{"id":"01KTCFVSRQVZH335P6G19KK533","parent_id":null,"user_id":null}},
+      "extra_data": {
+        "native_value": "{\"state\": \"N/A\"}",
+        "native_unit_of_measurement": null
+      },
+      "last_seen": "2026-06-05T18:14:14.106665+00:00"
+    },
+    {
+      "state": {"entity_id":"sensor.sensor_power_sensor_power","state":"unavailable","attributes":{"friendly_name":"Sensor Power Sensor Power"},"last_changed":"2026-06-05T18:13:57.146015+00:00","last_reported":"2026-06-05T18:13:57.146015+00:00","last_updated":"2026-06-05T18:13:57.146015+00:00","context":{"id":"01KTCFVSRTQSD6A1FZ5F9M934A","parent_id":null,"user_id":null}},
+      "extra_data": {
+        "native_value": "{\"state\": \"N/A\"}",
+        "native_unit_of_measurement": null
+      },
+      "last_seen": "2026-06-05T18:14:14.106665+00:00"
+    },
+    {
+      "state": {"entity_id":"switch.tomada_do_abajur","state":"unavailable","attributes":{"friendly_name":"Tomada do Abajur Tomada do Abajur"},"last_changed":"2026-06-05T14:28:35.151525+00:00","last_reported":"2026-06-05T14:39:33.350964+00:00","last_updated":"2026-06-05T14:28:35.151525+00:00","context":{"id":"01KTC2Z4PFD9GAA3D8V95PH2MJ","parent_id":null,"user_id":null}},
+      "extra_data": null,
+      "last_seen": "2026-06-05T14:39:33.361999+00:00"
     },
     {
       "state": {"entity_id":"switch.mestre_da_casa","state":"unavailable","attributes":{"device_class":"outlet","friendly_name":"Mestre da Casa"},"last_changed":"2026-06-05T11:28:04.675302+00:00","last_reported":"2026-06-05T11:28:04.675302+00:00","last_updated":"2026-06-05T11:28:04.675302+00:00","context":{"id":"01KTBRMM23G2K8SKWGV4Z7JXA6","parent_id":null,"user_id":null}},
@@ -82,22 +132,6 @@
       "extra_data": {
         "native_value": "{\"state\": \"N/A\"}",
         "native_unit_of_measurement": null
-      },
-      "last_seen": "2026-06-05T12:06:34.294328+00:00"
-    },
-    {
-      "state": {"entity_id":"sensor.medidor_de_energia_geral_energy","state":"unavailable","attributes":{"state_class":"total_increasing","unit_of_measurement":"kWh","device_class":"energy","friendly_name":"Medidor de Energia Geral Energy"},"last_changed":"2026-06-05T12:06:33.869642+00:00","last_reported":"2026-06-05T12:06:33.869642+00:00","last_updated":"2026-06-05T12:06:33.869642+00:00","context":{"id":"01KTBTV34DQ94J6GE93J8WQH3M","parent_id":null,"user_id":null}},
-      "extra_data": {
-        "native_value": null,
-        "native_unit_of_measurement": "kWh"
-      },
-      "last_seen": "2026-06-05T12:06:34.294328+00:00"
-    },
-    {
-      "state": {"entity_id":"sensor.medidor_de_energia_geral_power","state":"unavailable","attributes":{"state_class":"measurement","unit_of_measurement":"W","device_class":"power","friendly_name":"Medidor de Energia Geral Power"},"last_changed":"2026-06-05T12:06:33.869735+00:00","last_reported":"2026-06-05T12:06:33.869735+00:00","last_updated":"2026-06-05T12:06:33.869735+00:00","context":{"id":"01KTBTV34DMK4FEREES8R6BH79","parent_id":null,"user_id":null}},
-      "extra_data": {
-        "native_value": null,
-        "native_unit_of_measurement": "W"
       },
       "last_seen": "2026-06-05T12:06:34.294328+00:00"
     },

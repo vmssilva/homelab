@@ -50,9 +50,8 @@ class DeviceFactory:
             "configurations": raw_data.get("configurations", {}),
             "attributes": raw_data.get("attributes", {}),
             "adapters": raw_data.get("adapters", []),
-            "children": raw_data.get("children", []),
+            "variables": raw_data.get("variables", {}),
             "sensors": raw_data.get("sensors", []),
-            "variables": raw_data.get("variables", {})
         }
 
         # 3. Move chaves soltas na raiz do YAML para dentro de 'attributes'

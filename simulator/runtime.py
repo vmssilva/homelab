@@ -1,6 +1,7 @@
 import yaml
 import paho.mqtt.client as mqtt
-from typing import Optional, Any
+from typing import Dict, Optional, Any
+
 from .mqtt import MQTTService
 from .factory import DeviceFactory
 
@@ -23,6 +24,7 @@ class Runtime:
 
         for dev_entry in config_data.get("devices", []):
             try:
+
                 device_id = dev_entry.get("id", None)
 
                 if device_id == None:
@@ -37,6 +39,7 @@ class Runtime:
                 )
                 self.devices[f"{device.domain}.{device.id}"] = device
                 logger.debug(f"Dispositivo carregado: {device.name} ({device.domain})")
+
             except Exception as e:
                 logger.error(f"Erro ao carregar dispositivo {dev_entry.get('id')}: {e}")
 

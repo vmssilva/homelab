@@ -1,5 +1,6 @@
-default_config:
+#default_config:
+# Load frontend themes from the themes folder
 
-mqtt:
-  broker: mosquitto
-  port: 1883
+#mqtt:
+#  broker: mosquitto
+#  port: 1883

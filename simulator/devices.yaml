@@ -1,44 +1,27 @@
 # ==============================================================================
 # DISPOSITIVOS DE TESTE INTEGRADOS (SIMULADOR SMART HOME)
 # ==============================================================================
-
-# ==========================================
-# TESTE DE DISPOSITIVOS: AGRUPADOS VS SOLOS
-# ==========================================
 devices:
   # 1. Lâmpada Principal com Switch Agrupado (Pai)
   - type: "light"
     id: "hub_sala"
     name: "Lâmpada da Sala"
-    model: "Smart Light Hub Pro"
-    manufacturer: "Fluid Home"
-    configurations:
-      schema: "json"
-      brightness: true
     attributes:
       state: "OFF"
       brightness: 255
-    # 🌟 O PULO DO GATO: O switch nasce dentro do escopo do pai
-    #children:
-    #  - type: "switch"
-    #    id: "switch_tomada_sala"
-    #    name: "Tomada do Abajur"
-    #    payload_on: "ON"
-    #    payload_off: "OFF"
-    #    attributes:
-    #      state: "OFF"
-  # 2. Lâmpada Sozinha (Comportamento Tradicional)
+
   - type: "light"
     id: "lampada_cozinha"
-    name: "Lâmpada da Cozinha"
-    model: "Standard Light Bulb"
-    manufacturer: "Fluid Home"
     configurations:
-      schema: "json"
+      device:
+        identifiers: ["light.hub_sala"]
     attributes:
       state: "OFF"
       brightness: 180
 
+  - type: energy
+    id: "medidor_geral"
+    name: "Medidor de Energia Geral"
 
 #devices:
 #  - type: "switch"
