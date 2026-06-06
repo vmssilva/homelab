@@ -22,6 +22,10 @@ devices:
   - type: energy
     id: "medidor_geral"
     name: "Medidor de Energia Geral"
+  - type: fan
+    id: fan
+    configurations:
+      preset_modes: ["eco", "nature", "turbo"]
 
 #devices:
 #  - type: "switch"

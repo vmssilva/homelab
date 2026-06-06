@@ -1,6 +1,4 @@
-from os import device_encoding
 import threading
-import subprocess
 import json
 import time
 from typing import Any, Dict, List
@@ -185,7 +183,7 @@ class Device:
                 target_device = registries.get(target_id)
                 
                 if target_device and target_action:
-                    # 🌟 CENÁRIO A: É o 'execute_action' dinâmico (depende obrigatoriamente do Jinja)
+                    # CENÁRIO A: É o 'execute_action' dinâmico (depende obrigatoriamente do Jinja)
                     if target_action == "execute_action":
                         # Se o Jinja retornou vazio (condicional falsa), aí sim nós abortamos
                         if action_payload is None or str(action_payload).strip() == "":
@@ -194,7 +192,7 @@ class Device:
                         clean_action = str(action_payload).strip()
                         target_device.execute_action(clean_action)
                     
-                    # 🌟 CENÁRIO B: É um método direto (ex: 'turn_off', 'set_brightness')
+                    # CENÁRIO B: É um método direto (ex: 'turn_off', 'set_brightness')
                     else:
                         # Se não tem 'data' no YAML (caso do turn_off), executa puramente sem argumentos
                         if raw_data is None:
@@ -256,12 +254,76 @@ class Light(Device):
         super().__init__(id, name, service, options)
         self.domain = "light"
 
+        # color_mode: true
+        # supported_color_modes: ["rgb", "color_temp"]
+        # Home Assistant determines the active color_mode based on the last received valid color
+        # or color temperature data, unless explicitly overridden via color_mode_state_topic
+
+        # Home Assistant’s MQTT JSON light schema uses color_mode:
+        # true paired with supported_color_modes to define light capabilities, replacing deprecated feature flags
+        # like rgb, color_temp, and hs. 
+
+        # Valid color modes include onoff, brightness, color_temp, hs, xy, rgb, rgbw, and rgbww. 
+
+        # Example configuration:
+
+        # - light:
+        #   schema: json
+        #   name: mqtt_json_light_1
+        #   state_topic: "home/rgb1"
+        #   command_topic: "home/rgb1/set"
+        #   color_mode: true
+        #   supported_color_modes: ["rgb", "color_temp"]   
+
+        # Example Payload:
+        # BRIGHTNESS:
+        # "brightness": 128
+        # COLOR_TEMP:
+        # "color_temp": 300
+        # RGB:
+        # "color": { "r": 255, "g": 0, "b": 0 }
+        # HS:
+        # "color": { "h": 180.0, "s": 100.0 }
+        # XY:
+        # "color": { "x": 0.5, "y": 0.3 }
+
+
+        color_modes: List[str] = []
+
         if "state" not in self.attributes:
             self.attributes["state"] = "OFF"
 
         if "brightness" in self.attributes:
             self.configurations["brightness"] = True
+
+        if any(k in self.attributes for k in ["brightness", "color", "color_temp"]):
             self.configurations["schema"] = "json"
+
+        if any(k in self.attributes for k in ["color", "color_temp"]):
+            self.configurations["color_mode"] = True
+
+            if "color_temp" in self.attributes:
+                color_modes.append("color_temp")
+
+        if "color" in self.attributes:
+
+            color: Dict[str, Any] = self.attributes["color"]
+
+            if { "r", "g", "b" }.issubset(color):
+                color_modes.append("rgb")
+
+            if { "h", "s" }.issubset(color):
+                color_modes.append("hs")
+
+            if { "x", "y" }.issubset(color):
+                color_modes.append("xy")
+
+        if "supported_color_modes" in self.configurations:
+            color_modes.extend([item for item in self.configurations["supported_color_modes"] if item not in color_modes])
+
+        if len(color_modes) > 0:
+            self.configurations["supported_color_modes"] = color_modes
+
 
     def turn_on(self) -> None:
         """Turns the light ON preserving or resetting base attributes."""
@@ -287,6 +349,62 @@ class Light(Device):
         except (ValueError, TypeError) as e:
             logger.error(f"[LIGHT ERROR] Invalid brightness value '{brightness}' on '{self.id}': {e}")
 
+    def set_color(self, color: Any) -> None:
+        """Sets the light color dictionary (RGB, HS, or XY) and ensures the light is statefully ON.
+        
+        Clears conflicting color parameters to align with Home Assistant color_mode behaviors.
+        """
+        try:
+            # 1. Garante que o input seja tratado como dicionário (caso venha string JSON do terminal)
+            target_color = color
+            if isinstance(color, str):
+                target_color = json.loads(color)
+
+            if not isinstance(target_color, dict):
+                raise TypeError("Color payload must be a dictionary or a valid JSON string object.")
+
+            # 2. Converte as chaves internas para os tipos numéricos corretos dependendo do modo
+            sanitized_color = {}
+            
+            # Caso RGB (Inteiros)
+            if {"r", "g", "b"}.issubset(target_color.keys()):
+                sanitized_color = {
+                    "r": max(0, min(255, int(target_color["r"]))),
+                    "g": max(0, min(255, int(target_color["g"]))),
+                    "b": max(0, min(255, int(target_color["b"])))
+                }
+            # Caso HS (Floats)
+            elif {"h", "s"}.issubset(target_color.keys()):
+                sanitized_color = {
+                    "h": max(0.0, min(360.0, float(target_color["h"]))),
+                    "s": max(0.0, min(100.0, float(target_color["s"])))
+                }
+            # Caso XY (Floats)
+            elif {"x", "y"}.issubset(target_color.keys()):
+                sanitized_color = {
+                    "x": float(target_color["x"]),
+                    "y": float(target_color["y"])
+                }
+            else:
+                raise ValueError("Dictionary does not contain valid keys for RGB (r,g,b), HS (h,s), or XY (x,y).")
+
+            # 3. Atualiza os atributos da entidade
+            self.add_attribute("color", sanitized_color)
+            
+            # O PULO DO GATO: Se mudamos a cor, limpamos a temperatura para o HA chavear o color_mode correto
+            if "color_temp" in self.attributes:
+                self.attributes.pop("color_temp", None)
+
+            # Alterar a cor força o estado da lâmpada a ir para ligado
+            self.add_attribute("state", "ON")
+            
+            # Sincroniza e dispara os adapters e transmissão MQTT
+            self.update()
+            self.print_state()
+
+        except (ValueError, TypeError, json.JSONDecodeError) as e:
+            logger.error(f"[LIGHT ERROR] Invalid color payload '{color}' on '{self.id}': {e}")
+
     def on_message(self, client: Any, userdata: Any, msg: Any) -> None:
         """Handles incoming MQTT messages supporting text commands or complex JSON schemas."""
         try:
@@ -301,15 +419,32 @@ class Light(Device):
                 logger.info(f"[HA IN] {self.domain}.{self.id} -> {data}")
 
                 # Process stateful transitions within the incoming JSON object
+                #if "state" in data:
+                #    self.add_attribute("state", str(data["state"]).upper())
+                #if "brightness" in data and self.configurations.get("brightness"):
+                #    self.add_attribute("brightness", int(data["brightness"]))
+                #if "color" in data:
+                #    self.add_attribute("color", data["color"])
+                #if "color_temp" in data:
+                #    self.add_attribute("color_temp", int(data["color_temp"]))
+                
+                # ... dentro do if is_json_schema:
                 if "state" in data:
                     self.add_attribute("state", str(data["state"]).upper())
+                
                 if "brightness" in data and self.configurations.get("brightness"):
-                    self.add_attribute("brightness", int(data["brightness"]))
+                    # Uso do método para garantir gatilhos e logs unificados
+                    self.set_brightness(data["brightness"])
+                    
                 if "color" in data:
-                    self.add_attribute("color", data["color"])
+                    # Chama o novo método para garantir a limpeza do color_temp de forma segura
+                    self.set_color(data["color"])
+                    
                 if "color_temp" in data:
                     self.add_attribute("color_temp", int(data["color_temp"]))
-                
+                    # Se entrou temperatura, removemos a cor antiga do dicionário de estado vivo
+                    self.attributes.pop("color", None)
+
                 # Ensure changing parameters implicitly manages standard behavior
                 if self.attributes.get("brightness", 0) > 0 and "state" not in data:
                     self.add_attribute("state", "ON")
@@ -601,7 +736,7 @@ class Climate(Device):
     def setup(self) -> None:
         # Simplified discovery keys mapped against Home Assistant MQTT Climate expectations
         defaults = {
-            "temperature_unit": "C",  # 🌟 ISSO REALIZA A MUDANÇA PARA CELSIUS
+            "temperature_unit": "C",  # CELSIUS
             "mode_command_topic": self.mode_command_topic(),
             "mode_state_topic": self.state_topic(),
             "mode_state_template": "{{ value_json.mode }}",
@@ -681,7 +816,7 @@ class Climate(Device):
     def set_temperature(self, temperature: Any) -> None:
         """Updates targeted heating/cooling setpoint limits statefully with precision rounding."""
         try:
-            # 🌟 O PULO DO GATO: Arredonda para 1 casa decimal para matar o '15.5555555'
+            # Arredonda para 1 casa decimal para matar o '15.5555555'
             target_temp = round(float(temperature), 1)
             
             # Se o valor for inteiro (ex: 22.0), mantém visualmente limpo como int (ex: 22)
@@ -744,21 +879,42 @@ class Fan(Device):
             self.attributes["state"] = "OFF"
         if "percentage" not in self.attributes: 
             self.attributes["percentage"] = 0
+            
+        # STEP 1: Inicializa o estado do preset padrão na memória
+        if "preset_mode" not in self.attributes:
+            self.attributes["preset_mode"] = "normal"
 
     def percentage_command_topic(self) -> str:
         return f"homeassistant/{self.domain}/{self.id}/percentage/set"
 
+    # STEP 2: Rota para o canal de comandos de presets do Home Assistant
+    def preset_mode_command_topic(self) -> str:
+        return f"homeassistant/{self.domain}/{self.id}/preset/set"
+
     def setup(self) -> None:
         # Configuration setup targeted strictly at Home Assistant MQTT Fan specifications
         defaults = {
+            "schema": "json",
+            
             "percentage_command_topic": self.percentage_command_topic(),
             "percentage_state_topic": self.state_topic(),
             "percentage_value_template": "{{ value_json.percentage }}",
             
             "state_topic": self.state_topic(),
             "state_value_template": "{{ value_json.state }}",
-            "command_topic": self.command_topic()  # Reuses base state /set topic for basic ON/OFF
+            "command_topic": self.command_topic()
         }
+        
+        # Se o usuário definiu preset_modes no YAML, nós injetamos a configuração na descoberta
+        if "preset_modes" in self.configurations:
+            defaults["preset_modes"] = self.configurations["preset_modes"]
+            defaults["preset_mode_command_topic"] = self.preset_mode_command_topic()
+            defaults["preset_mode_state_topic"] = self.state_topic()
+            defaults["preset_mode_value_template"] = "{{ value_json.preset_mode }}"
+            
+            # Inicializa o atributo na memória se o modo estiver ativo
+            if "preset_mode" not in self.attributes:
+                self.attributes["preset_mode"] = self.configurations["preset_modes"][0]
         
         for key, val in defaults.items():
             if key not in self.configurations:
@@ -769,6 +925,10 @@ class Fan(Device):
         
         # Map specific multiplexed state listeners required by the Fan architecture
         self.service.subscribe(self.percentage_command_topic(), self.on_percentage_message)
+        
+        # Só assina o canal de preset se ele foi explicitamente configurado
+        if "preset_modes" in self.configurations:
+            self.service.subscribe(self.preset_mode_command_topic(), self.on_preset_message)
 
     def update(self, payload: Dict[str, Any] | None = None) -> None:
         """Serializes and broadcasts consolidated JSON multi-state payloads to HA."""
@@ -777,10 +937,14 @@ class Fan(Device):
             "percentage": int(self.attributes.get("percentage", 0))
         }
         
+        # Só envia a chave preset_mode no JSON se o recurso estiver ativo
+        if "preset_modes" in self.configurations:
+            payload_data["preset_mode"] = str(self.attributes.get("preset_mode"))
+        
         # Transmit clean atomic JSON string to the state topic
         self.service.publish(self.state_topic(), json.dumps(payload_data), retain=True)
 
-        # Trigger reactive adapter evaluation pipeline (Crucial for multi-entity automation)
+        # Trigger reactive adapter evaluation pipeline
         for adapter in self.adapters_config:
             if adapter.get("trigger") == "change":
                 self._change_adapter(adapter)
@@ -808,13 +972,22 @@ class Fan(Device):
         except Exception as e:
             logger.error(f"[FAN ERROR] Failed processing speed scale payload on '{self.id}': {e}")
 
+    # STEP 3 (Cont.): Listener para receber e processar o texto puro enviado pelo HA
+    def on_preset_message(self, client: Any, userdata: Any, msg: Any) -> None:
+        """Processes preset mode selection button events from the MQTT broker."""
+        try:
+            payload = msg.payload.decode("utf-8").strip()
+            logger.info(f"[HA IN] {self.domain}.{self.id} (Preset Target) -> '{payload}'")
+            self.set_preset_mode(payload)
+        except Exception as e:
+            logger.error(f"[FAN ERROR] Failed processing preset mode payload on '{self.id}': {e}")
+
     # --- Core Command Interfaces ---
     def turn_on(self) -> None:
         """Statefully turns the fan entity ON, defaulting speed parameters if stalled."""
         self._previous_attributes = self.attributes.copy()
         
         self.attributes["state"] = "ON"
-        # If fan was dead stopped (0%), force a baseline slow rotation speed (e.g., 33%)
         if int(self.attributes.get("percentage", 0)) == 0:
             self.attributes["percentage"] = 33
             
@@ -835,7 +1008,6 @@ class Fan(Device):
         """Explicitly sets the speed percentage boundary mapping power states accordingly."""
         try:
             pct = int(percentage)
-            # Boundary clamp safety guardrail (0 to 100)
             pct = max(0, min(100, pct))
             
             self._previous_attributes = self.attributes.copy()
@@ -847,14 +1019,56 @@ class Fan(Device):
         except (ValueError, TypeError) as e:
             logger.error(f"[FAN ERROR] Invalid speed step conversion logic target '{percentage}' on '{self.id}': {e}")
 
+    # STEP 3 (Cont.): Método principal de comando para atualizar o Preset
+    def set_preset_mode(self, preset_mode: str) -> None:
+        """Validates the preset, statefully turns the fan ON, and calculates
+
+        the speed percentage dynamically based on its declaration order.
+        """
+        allowed_presets = self.configurations.get("preset_modes", [])
+        if preset_mode not in allowed_presets:
+            logger.warning(f"[FAN WARNING] Rejected preset '{preset_mode}'. Not in supported list: {allowed_presets}")
+            return
+
+        self._previous_attributes = self.attributes.copy()
+        self.attributes["preset_mode"] = preset_mode
+        self.attributes["state"] = "ON"
+
+        # O PULO DO GATO: Cálculo matemático baseado na ordem de declaração
+        total_presets = len(allowed_presets)
+        
+        # Encontra a posição do item (ex: se for o primeiro item de 3, o índice é 0)
+        preset_index = allowed_presets.index(preset_mode)
+        
+        # Posição humana (1º, 2º, 3º...) para a matemática funcionar corretamente
+        position = preset_index + 1 
+        
+        # Fórmula: Se for o último item da lista, força 100%. 
+        # Caso contrário, distribui proporcionalmente e arredonda para inteiro.
+        if position == total_presets:
+            calculated_percentage = 100
+        else:
+            calculated_percentage = int(round((position / total_presets) * 100))
+
+        # Aplica a porcentagem calculada dinamicamente ao motor do ventilador
+        self.attributes["percentage"] = calculated_percentage
+
+        logger.info(
+            f"[FAN LOGIC] Preset '{preset_mode}' ativou velocidade dinâmica de {calculated_percentage}% "
+            f"(Posição {position} de {total_presets})"
+        )
+
+        self.print_state()
+        self.update()
+
     def print_state(self, include_attributes: bool = True) -> None:
         """Overridden log viewer to properly serialize the fan JSON state in the CLI."""
         payload_data = {
             "state": self.attributes.get("state", "OFF"),
-            "percentage": self.attributes.get("percentage", 0)
+            "percentage": self.attributes.get("percentage", 0),
+            "preset_mode": self.attributes.get("preset_mode", "normal") # Inserido no logger
         }
         logger.info(f"[STATE] {self.domain}.{self.id} -> {json.dumps(payload_data)}")
-
 
 ###########################
 # SENSOR
@@ -1285,7 +1499,7 @@ class Button(Device):
         """Triggers a transient state shift to fire internal cross-device adapters."""
         logger.info(f"[ACTION] Button '{self.id}' execution triggered")
         
-        # 🌟 O PULO DO GATO PARA ACIONAR O ADAPTER:
+        # O PULO DO GATO PARA ACIONAR O ADAPTER:
         # Criamos uma mudança artificial de estado de "vazio" para "PRESSED"
         self._previous_attributes = {"state": ""}
         self.attributes["state"] = "PRESSED"
